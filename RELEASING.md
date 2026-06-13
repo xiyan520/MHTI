@@ -93,3 +93,6 @@ git push origin v1.0.0
 - [ ] CHANGELOG 已更新（如有）
 - [ ] 版本号符合语义化规范
 - [ ] Secrets 已正确配置
+
+## 赞助作者
+![](https://i.imgs.ovh/2026/06/13/099f7aaed235aa63f1e1a3398f87c27d.jpg)
