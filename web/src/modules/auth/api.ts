@@ -31,6 +31,8 @@ export interface RefreshRequest {
 export interface RefreshResponse {
   access_token: string
   expires_in: number
+  /** 轮换后的 refresh token：拿到就必须替换本地旧值（旧值只在服务端宽限期内可用） */
+  refresh_token?: string
 }
 
 export interface VerifyResponse {

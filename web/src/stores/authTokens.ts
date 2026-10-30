@@ -112,6 +112,10 @@ export function createTokenManager(deps: {
       console.log('[Auth] 调用刷新 API')
       const response = await authApi.refresh({ refresh_token: refreshToken })
       updateAccessToken(response.data.access_token, response.data.expires_in)
+      // 轮换后的 refresh token 必须立刻替换：旧值只在服务端宽限期内有效
+      if (response.data.refresh_token) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, response.data.refresh_token)
+      }
       console.log('[Auth] 刷新成功，新 Token 有效期', response.data.expires_in, '秒')
       return true
     } catch (error) {

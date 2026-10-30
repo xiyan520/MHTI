@@ -83,8 +83,12 @@ async function refreshAccessToken(): Promise<string | null> {
       refresh_token: refreshToken,
     })
 
-    const { access_token, expires_in } = response.data
+    const { access_token, expires_in, refresh_token } = response.data
     updateTokens(access_token, expires_in)
+    // 服务端每次刷新都会轮换 refresh token，旧值只在宽限期内可用，必须落盘新值
+    if (refresh_token) {
+      localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
+    }
     console.log('[API] Token 刷新成功，有效期', expires_in, '秒')
     return access_token
   } catch (error) {

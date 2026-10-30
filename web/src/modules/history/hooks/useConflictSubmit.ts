@@ -107,8 +107,8 @@ export function useConflictSubmit(options: {
 
     loading.value = true
     try {
-      let season = options.selectedSeason.value
-      let episode = options.selectedEpisode.value || 1
+      const season = options.selectedSeason.value
+      const episode = options.selectedEpisode.value || 1
 
       // Emby 冲突处理
       let fileActionValue = conflictType === 'file_conflict' ? options.fileAction.value : null

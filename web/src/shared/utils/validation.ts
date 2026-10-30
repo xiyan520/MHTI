@@ -21,6 +21,7 @@ export function isValidFilename(filename: string | null | undefined): boolean {
   if (!filename || typeof filename !== 'string') return false
   if (filename.trim() === '') return false
   // 检查无效字符
+  // eslint-disable-next-line no-control-regex -- 这里就是要拦住控制字符（Windows 非法文件名）
   const invalidChars = /[<>:"/\\|?*\x00-\x1f]/
   if (invalidChars.test(filename)) return false
   // 检查保留名称（Windows）

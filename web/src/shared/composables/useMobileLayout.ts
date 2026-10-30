@@ -210,6 +210,9 @@ export function useResponsiveValue<T>(values: {
         return values.tablet ?? values.mobile
       case 'desktop':
         return values.desktop ?? values.tablet ?? values.mobile
+      default:
+        // 兜底：mode 将来新增取值时也不会返回 undefined
+        return values.mobile
     }
   })
 }
