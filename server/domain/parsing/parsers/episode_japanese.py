@@ -26,8 +26,9 @@ KANJI_NUMBERS = {
     "佰": 100, "仟": 1000,
 
     # ===== 中国繁体大写数字 =====
-    "壹": 1, "貳": 2, "參": 3, "叁": 3, "肆": 4, "伍": 5,
-    "陆": 6, "柒": 7, "捌": 8, "玖": 9, "拾": 10,
+    # 肆/伍/捌/玖/拾 与上面日语大写字形完全相同，不重复列出（重复键会被后者覆盖）
+    "壹": 1, "貳": 2, "參": 3, "叁": 3,
+    "陆": 6, "柒": 7,
 
     # ===== 日语古文/变体字形 =====
     "弍": 2,   # 弐的变体
@@ -36,8 +37,6 @@ KANJI_NUMBERS = {
     "贰": 2,   # 简化变体
     "叄": 3,   # 参的变体
     "仨": 3,   # 口语三
-    "陆": 6,   # 陸的简化
-    "柒": 7,   # 漆的变体（更常用）
 
     # ===== 全角数字 =====
     "０": 0, "１": 1, "２": 2, "３": 3, "４": 4,
@@ -72,7 +71,8 @@ SPECIAL_PATTERNS = [
     # 日语特别篇
     r"特別編|特別篇|特别编|特别篇",
     r"番外編|番外篇|番外编|番外篇",
-    r"SP編|SP篇|SP",
+    # SP 需要词边界：否则 SPY×FAMILY 这类纯标题会被误判成特别篇
+    r"SP編|SP篇|(?<![A-Za-z])SP(?![A-Za-z])",
     # OVA/OAD
     r"OVA|OAD|ONA",
     # 剧场版/总集篇
@@ -169,7 +169,6 @@ def kanji_to_number(kanji_str: str) -> int | None:
     # 组合汉字数字（如 十二 = 12, 二十三 = 23, 一百二十三 = 123）
     result = 0
     temp = 0
-    last_unit = 1
 
     for char in kanji_str:
         num = KANJI_NUMBERS.get(char)
@@ -182,7 +181,6 @@ def kanji_to_number(kanji_str: str) -> int | None:
                 temp = 1
             result += temp * num
             temp = 0
-            last_unit = num
         else:
             temp = num
 
@@ -226,8 +224,9 @@ class EpisodeJapanesePlugin(ParserPlugin):
         if self.should_skip(ctx):
             return ctx
 
-        # 使用原始文件名（保留完整信息）
-        text = ctx.original_filename
+        # 用清洗后的名字：日期前缀/制作组/副标题已被 cleaner 剥掉，
+        # 只在没有清洗结果（插件单独使用）时回退到原文
+        text = ctx.cleaned_filename or ctx.original_filename
         # 同时准备一个全角转半角的版本用于数字匹配
         text_normalized = fullwidth_to_halfwidth(text)
 
@@ -243,9 +242,11 @@ class EpisodeJapanesePlugin(ParserPlugin):
                 return ctx
 
         # 2. 检查特别篇/发行形态标记（仅用于集数兜底）
+        # 这里必须读原文：cleaner 会把 OVA/OAD 当发布噪声删掉，而这几类标记正是
+        # 「没有集数时兜底 E01」的依据，用清洗后的名字会把它一起丢掉。
         is_special = False
         for pattern in SPECIAL_PATTERNS:
-            if re.search(pattern, text):
+            if re.search(pattern, ctx.original_filename):
                 is_special = True
                 ctx.matched_patterns.append(f"{self.name}:special")
                 break

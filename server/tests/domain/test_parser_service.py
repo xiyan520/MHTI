@@ -314,12 +314,9 @@ class TestJapaneseEpisodeParser:
         ],
     )
     def test_parse_roman_numerals(self, parser_service, filename, expected_episode):
-        """Test Roman numeral episode parsing."""
-        # Note: Roman numerals are in KANJI_NUMBERS but need specific pattern to match
-        # This test documents expected behavior
+        """罗马数字集数（Ⅰ-Ⅻ）应解析成对应集号。"""
         result = parser_service.parse(filename)
-        # Roman numerals might not be matched without explicit pattern
-        # assert result.episode == expected_episode or result.episode is None
+        assert result.episode == expected_episode
 
     # ===== 全角数字测试 =====
     @pytest.mark.parametrize(
@@ -481,3 +478,40 @@ class TestRealWorldFilenames:
         result = parser_service.parse("[01].mp4")
         assert result.series_name is None
         assert result.episode == 1
+
+
+class TestCleanedNameParsing:
+    """集数解析统一走清洗后的名字。
+
+    清洗器剥掉的日期前缀、制作组方括号、画质标记、副标题，过去仍参与集数匹配，
+    导致 [720] 被当成第 720 集。这里逐条钉住这些真实文件名。
+    """
+
+    @pytest.mark.parametrize(
+        "filename,expected_name,expected_episode",
+        [
+            ("[251114] 作品名 [720] 第1話.mp4", "作品名", 1),
+            ("[720] 作品名 第1話.mp4", "作品名", 1),
+            ("260703]作品名 01.mp4", "作品名", 1),
+            ("[Queen Bee] 作品名 第2話 [1080p].mp4", "作品名", 2),
+            ("[作品名][第1話].mp4", "作品名", 1),
+            ("作品名 Ⅱ.mp4", "作品名", 2),
+        ],
+    )
+    def test_cleaned_name_drives_episode_parsing(
+        self, parser_service, filename, expected_name, expected_episode
+    ):
+        result = parser_service.parse(filename)
+        assert result.series_name == expected_name
+        assert result.episode == expected_episode
+
+    def test_title_with_sp_is_not_truncated(self, parser_service):
+        """SP 若无字母边界，SPY×FAMILY 会被当成特别篇标记把标题截空。"""
+        result = parser_service.parse("SPY×FAMILY 第1話.mp4")
+        assert result.series_name == "SPY×FAMILY"
+        assert result.episode == 1
+
+    def test_ova_without_number_falls_back_to_episode_1(self, parser_service):
+        result = parser_service.parse("作品名 OVA.mp4")
+        assert result.episode == 1
+        assert result.season == 1

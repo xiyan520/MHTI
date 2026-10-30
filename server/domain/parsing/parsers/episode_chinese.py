@@ -55,7 +55,8 @@ class EpisodeChinesePlugin(ParserPlugin):
         return ctx.episode is not None and ctx.season is not None
 
     def parse(self, ctx: ParseContext) -> ParseContext:
-        text = ctx.original_filename
+        # 与其它集数插件一致：清洗结果优先，原文兜底
+        text = ctx.cleaned_filename or ctx.original_filename
 
         for pattern, pattern_type in CHINESE_PATTERNS:
             match = re.search(pattern, text)
