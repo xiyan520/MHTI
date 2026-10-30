@@ -84,56 +84,117 @@ TRAILING_LANGUAGE_TAG = re.compile(
     re.I,
 )
 
-KNOWN_GROUPS = [
-    # ===== 主要里番制作公司 =====
-    r"Queen\s*Bee",
-    r"King\s*Bee",
-    r"Pink\s*Pineapple",
-    r"ピンクパイナップル",
-    r"Bunny\s*Walker",
-    r"ばにぃうぉ～か～",
-    r"Collaboration\s*Works",
-    r"Studio\s*Fantasia",
-    r"魔人",
-    r"Majin",
-    r"PoRO",
-    r"A1C",
-    r"Arms",
-    r"Lilith",
-    r"BOOTLEG",
-    r"T-Rex",
-    r"Pixy",
-    r"ANIMATED",
-    r"Milky",
-    r"Pashmina",
-    r"GOLD\s*BEAR",
-    r"DISCOVERY",
-    r"nur",
-    r"Suzuki\s*Mirano",
-    r"MS\s*Pictures",
-    r"Lune",
-    r"Seven",
-    r"セブン",
-    r"ChiChinoya",
-    r"ちちのや",
-    r"Mary\s*Jane",
-    r"メリー・ジェーン",
-    r"Celeb",
-    r"セレブ",
-    r"Breakbottle",
-    r"Digital\s*Works",
-    r"Green\s*Bunny",
-    r"グリーンバニー",
-    r"Vanilla",
-    r"バニラ",
-    r"Animac",
-    r"アニマック",
-    r"Schoolzone",
-    r"スクールゾーン",
-    # ===== 字幕组 =====
-    r"字幕组",
-    r"動畫瘋",
-    r"喵萌",
+# ============================================================================
+# 制作组 / 发行标签
+# ============================================================================
+# 这里写「规范名」而不是正则：名字内部的分隔符（空格、下划线、中黑、连字符）
+# 由 _separator_tolerant 统一容错，免得每加一个组就要写两三个变体。
+# 例：Queen_Bee村又… / Queen Bee 村又… / クイーン・ビー村又… 都能命中同一个条目。
+_STUDIO_NAMES: tuple[str, ...] = (
+    # ===== 主要里番制作会社 / 品牌 =====
+    "Pink Pineapple",
+    "ピンク・パイナップル",
+    "Queen Bee",
+    "クイーン・ビー",
+    "King Bee",
+    "Bunny Walker",
+    "ばにぃうぉ～か～",
+    "ばにぃうぉ〜か〜",
+    "Mary Jane",
+    "メリー・ジェーン",
+    "ChiChinoya",
+    "ちちのや",
+    "Seven",
+    "セブン",
+    "Celeb",
+    "セレブ",
+    "Green Bunny",
+    "グリーン・バニー",
+    "Vanilla",
+    "バニラ",
+    "Animac",
+    "アニマック",
+    "Schoolzone",
+    "スクールゾーン",
+    "Majin",
+    "魔人",
+    "PoRO",
+    "Shouten",
+    "ショーテン",
+    "Milky",
+    "ミルキー",
+    "Digital Works",
+    "デジタル・ワークス",
+    "DISCOVERY",
+    "ディスカバリー",
+    "GOLD BEAR",
+    "Pashmina",
+    "パシュミナ",
+    "Lilith",
+    "リリス",
+    "BOOTLEG",
+    "ぶーとれっぐ",
+    "T-Rex",
+    "ティーレックス",
+    "Pixy",
+    "ピクシー",
+    "A1C",
+    "Arms",
+    "アームス",
+    "ANIMATED",
+    "アニメイテッド",
+    "Collaboration Works",
+    "コラボレーション・ワークス",
+    "Studio Fantasia",
+    "スタジオ・ファンタジア",
+    "MS Pictures",
+    "エム・エス・ピクチャーズ",
+    "Suzuki Mirano",
+    "鈴木みら乃",
+    "Lune",
+    "nur",
+    "ヌール",
+    "Marigold",
+    "マリゴールド",
+    "Breakbottle",
+    # ===== 字幕组 / 搬运标签 =====
+    "字幕组",
+    "動畫瘋",
+    "喵萌",
+    "桜都字幕组",
+    "樱都字幕组",
+    "千夏字幕组",
+    "幻樱字幕组",
+    "极影字幕社",
+    "动漫国字幕组",
+    "诸神字幕组",
+    "澄空学园",
+    "LoliHouse",
+)
+
+
+def _separator_tolerant(name: str) -> str:
+    """把规范名编译成正则：内部分隔符可缺省，且允许 空格/下划线/中黑/连字符 互换。"""
+    parts = [re.escape(part) for part in re.split(r"[\s_\-・·.]+", name.strip()) if part]
+    return r"[\s_\-・·.]*".join(parts)
+
+
+def _studio_pattern(name: str) -> str:
+    """补上字母边界：只在名字以拉丁字母结尾时要求后面不是字母。
+
+    拉丁短名（nur）不加边界会把 nurse 之类英文词的开头当制作组；但日语名后面
+    常常直接跟拉丁标题（魔人NTR騎士），那种情况不能拦。
+    """
+    pattern = _separator_tolerant(name)
+    if re.search(r"[A-Za-z]$", name):
+        pattern += r"(?![A-Za-z])"
+    return pattern
+
+
+# 长名优先，避免短名抢先命中
+KNOWN_GROUPS: list[str] = [
+    _studio_pattern(name)
+    for name in sorted(_STUDIO_NAMES, key=len, reverse=True)
 ]
 
 # ============================================================================

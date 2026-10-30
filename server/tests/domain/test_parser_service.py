@@ -3,7 +3,7 @@
 import pytest
 
 from server.domain.parsing.parser_service import ParserService
-from server.domain.parsing.parsers.cleaner import strip_known_group_prefix
+from server.domain.parsing.parsers.cleaner import _STUDIO_NAMES, strip_known_group_prefix
 
 
 @pytest.fixture
@@ -542,3 +542,43 @@ class TestStudioPrefixFallback:
 
         assert result.episode == 1
         assert "chs" not in (result.series_name or "")
+
+
+class TestStudioNameTable:
+    """制作组清单本身的质量：每个条目都能命中自己，且不吃掉正常标题。"""
+
+    @pytest.mark.parametrize("name", _STUDIO_NAMES)
+    def test_every_entry_strips_itself(self, name):
+        # 用「名字 + 作品名」验证：既能被识别，又不会把后面的作品名一起吃掉
+        assert strip_known_group_prefix(f"{name}作品名") == "作品名"
+
+    @pytest.mark.parametrize(
+        "title,expected",
+        [
+            # 下划线与空格混用（真实文件名：260911Queen_Bee村又さんの愛情_…）
+            ("Queen_Bee村又さんの愛情", "村又さんの愛情"),
+            ("Queen Bee村又さんの愛情", "村又さんの愛情"),
+            # 中黑版本
+            ("ピンク・パイナップル無自覚な幼馴染", "無自覚な幼馴染"),
+            ("メリー・ジェーン小女ラムネ", "小女ラムネ"),
+            # 日语名后直接跟拉丁标题，不能被字母边界挡住
+            ("魔人NTR騎士", "NTR騎士"),
+            # 新增的制作组
+            ("ショーテン性指導員のお仕事", "性指導員のお仕事"),
+            ("ヌールハメハラ", "ハメハラ"),
+        ],
+    )
+    def test_common_spellings(self, title, expected):
+        assert strip_known_group_prefix(title) == expected
+
+    @pytest.mark.parametrize(
+        "title",
+        [
+            "nurse angel",
+            "naruto",
+            "Arms 第1話",  # 剥完只剩集数标记，不算有效剧名
+            "無自覚な幼馴染",
+        ],
+    )
+    def test_latin_titles_are_not_mangled(self, title):
+        assert strip_known_group_prefix(title) is None
