@@ -204,7 +204,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MHTI API",
     description="API for scanning and scraping TV series metadata",
-    version="2.0.0",
+    version="2.0.1",
     lifespan=lifespan,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -345,7 +345,7 @@ async def root() -> dict[str, str]:
     """Root endpoint with API information."""
     return {
         "name": "MHTI API",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "docs": "/api/docs",
     }
 

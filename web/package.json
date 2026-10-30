@@ -1,7 +1,7 @@
 {
   "name": "mhti",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "自托管的媒体刮削与整理工具：TMDB 元数据、NFO 生成、115 网盘",
   "license": "Apache-2.0",
   "author": "xiyan520",

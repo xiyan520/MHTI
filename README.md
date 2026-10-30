@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://github.com/xiyan520/MHTI/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/xiyan520/MHTI/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Version" src="https://img.shields.io/badge/version-2.0.0-blue">
+  <img alt="Version" src="https://img.shields.io/badge/version-2.0.1-blue">
   <img alt="Python" src="https://img.shields.io/badge/python-3.11%2B-3776AB">
   <img alt="Vue" src="https://img.shields.io/badge/vue-3.5-42B883">
   <img alt="Node" src="https://img.shields.io/badge/node-24-339933">

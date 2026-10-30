@@ -19,7 +19,7 @@ FROM python:3.12-slim AS runtime
 
 LABEL org.opencontainers.image.title="MHTI"
 LABEL org.opencontainers.image.description="Media metadata scraper with TMDB integration"
-LABEL org.opencontainers.image.version="2.0.0"
+LABEL org.opencontainers.image.version="2.0.1"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
