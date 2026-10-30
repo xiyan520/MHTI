@@ -38,6 +38,7 @@
 
 ### 移除
 - `tracked_py.txt`（长期空文件）
+- `application/scraping/preview.py`：`ScrapePreviewService` 从未被任何地方调用，且内部 await 同步方法、调用不存在的 `search_series`、构造不存在的 `parsed_info` 字段，一旦使用必然报错；预演实际走 `ScraperService.preview()`
 - `pyproject.toml` 的 `[tool.black]`（构建链未安装 black，格式统一交给 ruff）
 
 ---
