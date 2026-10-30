@@ -21,6 +21,9 @@ from server.models.storage import StorageLocator, StorageProvider
 
 logger = logging.getLogger(__name__)
 
+# 未投递文件写入记录时的原因，详情页与列表都能看到
+_SKIP_REASON = "已有处理中的刮削任务，本次未重复投递"
+
 
 def _link_mode_to_organize_mode(link_mode: LinkMode) -> OrganizeMode:
     """将 LinkMode 转换为 OrganizeMode"""
@@ -191,6 +194,33 @@ class ManualJobService:
             error_message=error_message,
         )
 
+    async def _record_skipped_file(self, job_id: int, file_path: str) -> None:
+        """给未投递的文件补一条「跳过」记录。
+
+        跳过只体现在统计里而不落记录时，任务行显示「跳过 N」却在记录页
+        一条也对不上；补记录同时让 refresh_progress 的计数有据可依。
+        """
+        from server.application.history_service import HistoryService
+        from server.models.history import HistoryRecordCreate, TaskSource, TaskStatus
+
+        try:
+            await HistoryService(db_path=self.db_path).create_record(
+                HistoryRecordCreate(
+                    task_name=f"跳过：{Path(file_path).name}",
+                    folder_path=file_path,
+                    status=TaskStatus.SKIPPED,
+                    source=TaskSource.MANUAL,
+                    total_files=1,
+                    success_count=0,
+                    failed_count=0,
+                    duration_seconds=0,
+                    error_message=_SKIP_REASON,
+                    manual_job_id=job_id,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 - 补记录失败不能中断整批投递
+            logger.warning(f"手动任务 #{job_id} 跳过记录写入失败 {file_path}: {exc}")
+
     async def refresh_progress(self, job_id: int) -> None:
         """按子记录重算进度，并在整批处理完毕时收尾。
 
@@ -213,8 +243,8 @@ class ManualJobService:
         user_skipped = counts.get("skipped", 0)
         unresolved = sum(counts.get(status, 0) for status in ("running", "pending_action"))
 
-        # 投递未结束时还无法确定有哪些文件被跳过，沿用投递阶段写入的值；
-        # 投递结束后「总数 - 已派发」就是真实的跳过数。
+        # 投递结束后 dispatched_count 已覆盖本次处理过的全部文件，「总数 - 已处理」
+        # 只对旧口径（仅统计成功投递）的存量任务才非零；新的跳过一律以记录为准。
         if job.dispatched_count is None:
             dispatch_skipped = job.skip_count
         else:
@@ -476,6 +506,7 @@ async def _execute_job(service: ManualJobService, job_id: int) -> None:
             else:
                 skipped_count += 1
                 logger.info(f"手动任务 #{job_id} 跳过（已有处理中任务）: {file_path}")
+                await service._record_skipped_file(job_id, file_path)
 
         # 投递结束只是中途状态：任务要等这批文件的子任务全部落地才算完成。
         # 这里先记下派发结果作为进度基准，再由 refresh_progress 结算。
@@ -485,7 +516,8 @@ async def _execute_job(service: ManualJobService, job_id: int) -> None:
             success_count=0,
             skip_count=skipped_count,
             error_count=0,
-            dispatched_count=dispatched_count,
+            # 跳过同样处理完毕，一并计入，避免与跳过记录的统计重复相减
+            dispatched_count=dispatched_count + skipped_count,
         )
         await service.refresh_progress(job_id)
         logger.info(

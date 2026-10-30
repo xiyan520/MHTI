@@ -98,8 +98,8 @@ class ManualJob(BaseModel):
     skip_count: int = 0
     error_count: int = 0
     total_count: int = 0
-    # 投递阶段写入：成功排进刮削队列的文件数。为 None 表示扫描/投递尚未结束，
-    # 任务此时还无法判定是否已处理完。
+    # 投递阶段写入：本次已处理（投递成功 + 跳过）的文件数。为 None 表示扫描/
+    # 投递尚未结束，任务此时还无法判定是否已处理完。
     dispatched_count: int | None = None
     error_message: str | None = None
 
