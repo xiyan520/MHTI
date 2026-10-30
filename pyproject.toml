@@ -1,9 +1,12 @@
 [tool.poetry]
 name = "mhti"
 version = "2.0.0"
-description = "MHTI - TV Series metadata scraper with TMDB integration"
-authors = ["Developer"]
+description = "MHTI - 自托管的媒体刮削与整理工具：TMDB 元数据、NFO 生成、115 网盘"
+authors = ["xiyan520 <initals@qq.com>"]
+license = "Apache-2.0"
 readme = "README.md"
+repository = "https://github.com/xiyan520/MHTI"
+keywords = ["tmdb", "scraper", "nfo", "emby", "jellyfin", "115"]
 
 [tool.poetry.dependencies]
 python = "^3.11"

@@ -2,6 +2,13 @@
   "name": "mhti",
   "private": true,
   "version": "2.0.0",
+  "description": "自托管的媒体刮削与整理工具：TMDB 元数据、NFO 生成、115 网盘",
+  "license": "Apache-2.0",
+  "author": "xiyan520",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xiyan520/MHTI.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",

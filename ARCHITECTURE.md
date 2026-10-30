@@ -56,6 +56,10 @@ router 统一从这里取依赖，方便测试覆盖。
 进程重启后内存队列为空，`recover_pending_jobs` 会把 `pending` 重新入队、把 `running` 收尾为
 `failed`（半搬运状态不自动重放）。
 
+手动任务是「扫描 → 投递」的批次：投递完成仍保持 `running`，`refresh_progress` 按
+`history_records` 重算成功 / 失败 / 跳过，等子任务全部到达终态且计数收满才收尾；
+重启时已投递的批次不再判死，交给子任务回写推进。
+
 ## 4. 前端六域
 
 ```
@@ -91,7 +95,7 @@ SQLite 走连接池 + WAL（`infrastructure/db/connection.py`），所有 SQL �
 
 ## 6. 安全基线
 
-- 口令：PBKDF2-HMAC-SHA256 + 随机盐（`domain/identity/auth_service.py`）。
+- 口令：PBKDF2-HMAC-SHA256 + 随机盐，默认 60 万轮；哈希自带算法与参数（`pbkdf2_sha256$…`），旧格式登录成功时就地升级（`domain/identity/auth_service.py`）。
 - 令牌：access 15 分钟；refresh 每次刷新轮换，旧值仅保留 `REFRESH_GRACE_SECONDS` 宽限。
 - 敏感配置（TMDB Token、115 Cookie、Emby Key）Fernet 加密入库，密钥文件在 `DATA_DIR/.secret_key`。
 - `DATA_DIR` 环境变量统一决定 SQLite、密钥、日志、115 客户端缓存的位置。

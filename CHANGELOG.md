@@ -2,15 +2,10 @@
 
 所有重要的项目变更都会记录在此文件中。
 
-格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
+格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
 ## [Unreleased]
-
-### 计划中
-- 多语言支持 (i18n)
-- 批量任务队列优化
-- 更多媒体源支持
 
 ### 修复
 - 进程重启后 pending 任务永久卡住：启动时重放 pending、把 running 收尾为 failed，并同步关闭关联的历史记录
@@ -90,30 +85,6 @@
 ### 移除
 - 设置页「已刮削文件」分组与 `/api/scraped-files` 接口（登记表保留，重复判断改按文件指纹）
 - 旧 `services/` 目录与 `core/` 目录，前端死类型与死样式
-
----
-
-## [1.0.0] - 2024-XX-XX
-
-### 新增
-- 🎬 视频文件名智能解析（支持标准、中文、日文格式）
-- 🔍 TMDB 元数据搜索与自动匹配
-- 📝 NFO 文件生成（Emby/Jellyfin 兼容）
-- 📁 文件整理（复制/移动/硬链接/软链接四种模式）
-- 🖼️ 海报、背景图、剧集缩略图自动下载
-- 📺 字幕文件自动关联
-- 👁️ 文件夹实时监控与自动刮削
-- 🔗 Emby 媒体库冲突检测
-- 🔐 JWT 认证与多会话管理
-- 🌙 亮色/暗色主题切换
-- 📊 首页统计概览
-- 🐳 Docker 一键部署
-- 🌐 WebSocket 实时进度推送
-
-### 技术栈
-- 后端：Python 3.11 + FastAPI + aiosqlite
-- 前端：Vue 3.5 + TypeScript 5.9 + Naive UI
-- 部署：Docker + Caddy
 
 ---
 

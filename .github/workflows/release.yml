@@ -2,7 +2,7 @@
 # MHTI 自动构建与发布工作流
 # =============================================================================
 # 触发条件：
-#   - 推送带有 v* 格式的标签 (如 v1.0.0)
+#   - 推送带有 v*.*.* 格式的标签 (如 v2.0.0)
 #   - 手动触发 (workflow_dispatch)
 #
 # 功能：
@@ -21,9 +21,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号 (如 1.0.0，不带 v 前缀)'
+        description: '版本号 (如 2.0.0，不带 v 前缀)'
         required: true
-        default: '1.0.0'
+        default: '2.0.0'
       prerelease:
         description: '是否为预发布版本'
         required: false

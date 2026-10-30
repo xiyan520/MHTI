@@ -1,95 +1,93 @@
 # 版本发布指南
 
-本项目使用 [语义化版本](https://semver.org/lang/zh-CN/) 进行版本控制。
+本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)，通过 GitHub Actions 工作流 `Build and Release` 构建并发布 Docker 镜像。
 
 ## 版本格式
 
-```
+```text
 主版本号.次版本号.修订号[-预发布标识]
-
-示例：
-- 1.0.0      - 正式版本
-- 1.1.0      - 新功能版本
-- 1.1.1      - 修复版本
-- 2.0.0-beta - 预发布版本
 ```
+
+| 示例 | 含义 |
+| --- | --- |
+| `2.0.0` | 正式版本 |
+| `2.1.0` | 新增功能，向后兼容 |
+| `2.1.1` | 缺陷修复 |
+| `3.0.0` | 存在不兼容变更 |
+| `2.1.0-beta.1` | 预发布版本 |
 
 ## 发布流程
 
-### 1. 创建版本标签
+### 1. 准备版本
+
+1. 将 `CHANGELOG.md` 的 `[Unreleased]` 段落整理为待发布版本，并补上发布日期。
+2. 同步版本号，以下位置必须一致：
+
+   | 位置 | 字段 |
+   | --- | --- |
+   | `server/main.py` | `FastAPI(version=...)` 与根路由返回的 `version` |
+   | `server/api/v1/frontend_config.py` | `APP_VERSION` 的默认值 |
+   | `web/package.json` | `version` |
+   | `pyproject.toml` | `[tool.poetry] version` |
+
+3. 本地跑通「质量门禁」：`ruff check server`、`mypy`、`pytest server/tests -q`、`cd web && npm run build:check`。
+
+### 2. 打标签
 
 ```bash
-# 确保在 main 分支
-git checkout main
+git switch main
 git pull origin main
 
-# 创建标签
-git tag -a v1.0.0 -m "Release v1.0.0: 初始发布"
-
-# 推送标签
-git push origin v1.0.0
+git tag -a v2.1.0 -m "Release v2.1.0"
+git push origin v2.1.0
 ```
 
-### 2. 自动触发 Actions
+标签必须形如 `v<主>.<次>.<修订>`，工作流靠 `v*.*.*` 触发。
 
-推送标签后，GitHub Actions 会自动：
+### 3. 自动发布
 
-1. ✅ 构建前端 (Vue.js)
-2. ✅ 构建 Docker 多架构镜像 (amd64, arm64)
-3. ✅ 推送到 Docker Hub (`xiyan520/mhti:latest` 和版本标签)
-4. ✅ 创建 GitHub Release
+推送标签后，`Build and Release` 工作流会：
 
-### 3. 手动触发发布
+1. 构建前端并打包进 Docker 镜像（多架构：`amd64` / `arm64`）。
+2. 推送到 Docker Hub，并按标签策略打多个 tag。
+3. 创建 GitHub Release，附带变更说明。
 
-也可以在 GitHub Actions 页面手动触发：
+### 4. 手动触发
 
-1. 进入 Actions → Build and Release
-2. 点击 "Run workflow"
-3. 输入版本号（不带 v 前缀）
-4. 选择是否为预发布版本
+在 GitHub 的 Actions → `Build and Release` → Run workflow，填写：
 
-## 版本号规则
-
-| 变更类型 | 版本变化 | 示例 |
-|---------|---------|------|
-| 重大不兼容变更 | 主版本号 +1 | 1.0.0 → 2.0.0 |
-| 新功能（向后兼容） | 次版本号 +1 | 1.0.0 → 1.1.0 |
-| Bug 修复 | 修订号 +1 | 1.0.0 → 1.0.1 |
-| 预发布版本 | 添加后缀 | 1.1.0-alpha, 1.1.0-beta, 1.1.0-rc.1 |
+| 输入 | 说明 |
+| --- | --- |
+| `version` | 版本号，不带 `v` 前缀，如 `2.1.0` |
+| `prerelease` | 是否为预发布版本 |
 
 ## Docker 标签策略
 
-发布 `v1.2.3` 时，会自动创建以下标签：
+发布 `v2.1.3` 时生成：
 
 | 标签 | 说明 |
-|------|------|
-| `xiyan520/mhti:1.2.3` | 完整版本号 |
-| `xiyan520/mhti:1.2` | 主次版本号 |
-| `xiyan520/mhti:1` | 主版本号 |
-| `xiyan520/mhti:latest` | 最新稳定版（非预发布） |
+| --- | --- |
+| `xiyan520/mhti:2.1.3` | 完整版本号 |
+| `xiyan520/mhti:2.1` | 主次版本号 |
+| `xiyan520/mhti:2` | 主版本号 |
+| `xiyan520/mhti:latest` | 最新稳定版（预发布不覆盖） |
 
-## 必需的 Secrets 配置
+## 必需的 Secrets
 
-在 GitHub 仓库设置中配置以下 Secrets：
+在仓库 Settings → Secrets and variables → Actions 中配置：
 
-| Secret 名称 | 说明 |
-|------------|------|
+| Secret | 说明 |
+| --- | --- |
 | `DOCKERHUB_USERNAME` | Docker Hub 用户名 |
-| `DOCKERHUB_TOKEN` | Docker Hub 访问令牌 |
+| `DOCKERHUB_TOKEN` | Docker Hub 访问令牌（Read & Write） |
 
-### 获取 Docker Hub Token
-
-1. 登录 [Docker Hub](https://hub.docker.com/)
-2. 进入 Account Settings → Security
-3. 创建 Access Token（选择 Read & Write 权限）
-4. 复制 Token 到 GitHub Secrets
+获取令牌：Docker Hub → Account Settings → Security → New Access Token。
 
 ## 发布检查清单
 
-发布前请确认：
-
-- [ ] 所有测试通过
-- [ ] 文档已更新
-- [ ] CHANGELOG 已更新（如有）
-- [ ] 版本号符合语义化规范
-- [ ] Secrets 已正确配置
+- [ ] 质量门禁全部通过
+- [ ] 版本号四处一致
+- [ ] `CHANGELOG.md` 已整理并标注日期
+- [ ] 文档中失效的版本号、截图与链接已更新
+- [ ] Secrets 配置就绪
+- [ ] 预发布版本已确认 `prerelease` 开关
