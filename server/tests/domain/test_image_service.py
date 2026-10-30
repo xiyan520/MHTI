@@ -79,7 +79,9 @@ class TestImageServiceDownload:
 
             mock_instance = AsyncMock()
             mock_instance.get.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             result = await image_service.download_image(
                 url="https://example.com/image.jpg",
@@ -100,7 +102,9 @@ class TestImageServiceDownload:
 
             mock_instance = AsyncMock()
             mock_instance.get.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             result = await image_service.download_image(
                 url="https://example.com/notfound.jpg",
@@ -124,7 +128,9 @@ class TestImageServiceDownload:
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.get.side_effect = httpx.TimeoutException("timeout")
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             with patch("asyncio.sleep", new_callable=AsyncMock):
                 result = await image_service.download_image(
@@ -149,7 +155,9 @@ class TestImageServiceDownload:
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.get.side_effect = httpx.RequestError("connection failed")
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             result = await image_service.download_image(
                 url="https://example.com/image.jpg",
@@ -187,7 +195,9 @@ class TestImageServiceBatch:
 
             mock_instance = AsyncMock()
             mock_instance.get.return_value = mock_response
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             requests = [
                 ImageDownloadRequest(
@@ -229,7 +239,9 @@ class TestImageServiceBatch:
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.get = mock_get
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             requests = [
                 ImageDownloadRequest(

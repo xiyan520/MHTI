@@ -11,6 +11,7 @@ from server.common.exceptions import (
     TMDBTimeoutError,
 )
 from server.domain.system.config_service import ConfigService
+from server.infrastructure.http import get_client
 from server.models.config import ApiTokenStatus
 from server.models.tmdb import (
     TMDBEpisode,
@@ -97,21 +98,16 @@ class TMDBService:
                     "Authorization": f"Bearer {token}",
                     "Accept": "application/json",
                 }
-                async with httpx.AsyncClient(
-                    timeout=timeout,
-                    proxy=proxy_url,
-                ) as client:
-                    return await client.get(url, headers=headers, params=params)
+                api_params = params
             else:
                 headers = {"Accept": "application/json"}
                 api_params = {"api_key": token}
                 if params:
                     api_params.update(params)
-                async with httpx.AsyncClient(
-                    timeout=timeout,
-                    proxy=proxy_url,
-                ) as client:
-                    return await client.get(url, headers=headers, params=api_params)
+
+            # 复用共享客户端：一次刮削要打 6+ 个请求，每次新建都要重做 TLS 握手
+            client = get_client(proxy=proxy_url, timeout=timeout)
+            return await client.get(url, headers=headers, params=api_params)
         except httpx.TimeoutException:
             raise TMDBTimeoutError(endpoint)
         except httpx.RequestError as e:
@@ -135,12 +131,12 @@ class TMDBService:
         try:
             start = time.time()
             timeout = await self._get_timeout()
-            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
-                response = await client.get(
-                    TMDB_BASE_URL,
-                    headers={"User-Agent": "Mozilla/5.0"},
-                    follow_redirects=True,
-                )
+            client = get_client(proxy=proxy_url, timeout=timeout)
+            response = await client.get(
+                TMDB_BASE_URL,
+                headers={"User-Agent": "Mozilla/5.0"},
+                follow_redirects=True,
+            )
             latency = int((time.time() - start) * 1000)
 
             if response.status_code == 200:
@@ -214,29 +210,29 @@ class TMDBService:
                 params = {"api_key": token}
 
             timeout = await self._get_timeout()
-            async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
-                response = await client.get(url, headers=headers, params=params)
+            client = get_client(proxy=proxy_url, timeout=timeout)
+            response = await client.get(url, headers=headers, params=params)
 
-                if response.status_code == 200:
-                    return True, None
-                elif response.status_code == 401:
-                    try:
-                        error_data = response.json()
-                        status_message = error_data.get("status_message", "")
-                        if status_message:
-                            return False, f"API Token 验证失败: {status_message}"
-                    except Exception:
-                        pass
-                    return False, "API Token 无效或已过期"
-                else:
-                    try:
-                        error_data = response.json()
-                        status_message = error_data.get("status_message", "")
-                        if status_message:
-                            return False, f"验证失败: {status_message}"
-                    except Exception:
-                        pass
-                    return False, f"验证失败: HTTP {response.status_code}"
+            if response.status_code == 200:
+                return True, None
+            elif response.status_code == 401:
+                try:
+                    error_data = response.json()
+                    status_message = error_data.get("status_message", "")
+                    if status_message:
+                        return False, f"API Token 验证失败: {status_message}"
+                except Exception:
+                    pass
+                return False, "API Token 无效或已过期"
+            else:
+                try:
+                    error_data = response.json()
+                    status_message = error_data.get("status_message", "")
+                    if status_message:
+                        return False, f"验证失败: {status_message}"
+                except Exception:
+                    pass
+                return False, f"验证失败: HTTP {response.status_code}"
 
         except httpx.TimeoutException:
             return False, "连接超时 - 请检查网络或代理设置"

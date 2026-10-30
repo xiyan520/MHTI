@@ -15,7 +15,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 from server.api.deps import AuthContext, require_auth
+from server.infrastructure.http import reset_http_clients
 from server.main import app
+
+
+@pytest.fixture(autouse=True)
+def reset_http_client_cache() -> Generator[None, None, None]:
+    """每个用例前清空共享 httpx 客户端缓存。
+
+    多处用例用 patch("httpx.AsyncClient") 观察请求；缓存不清的话，后一个用例会
+    复用前一个用例创建的实例，patch 直接失效。
+    """
+    reset_http_clients()
+    yield
+    reset_http_clients()
 
 # =============================================================================
 # Authentication Fixtures

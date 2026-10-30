@@ -59,6 +59,11 @@ async def cleanup_services() -> None:
     container = await get_container_async()
     container.clear()
     ServiceContainer._instance = None
+
+    # 共享 HTTP 客户端持有连接池，进程退出前必须显式关闭
+    from server.infrastructure.http import close_all as close_http_clients
+
+    await close_http_clients()
     logger.info("Service container cleaned up")
 
 

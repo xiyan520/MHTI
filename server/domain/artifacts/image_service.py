@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 
 from server.domain.system.config_service import ConfigService
+from server.infrastructure.http import get_client
 from server.models.image import (
     BatchDownloadResponse,
     ImageDownloadRequest,
@@ -93,31 +94,31 @@ class ImageService:
 
         for attempt in range(max_retries):
             try:
-                async with httpx.AsyncClient(timeout=timeout, proxy=proxy_url) as client:
-                    response = await client.get(url, headers=self._headers)
+                client = get_client(proxy=proxy_url, timeout=timeout)
+                response = await client.get(url, headers=self._headers)
 
-                    if response.status_code == 404:
-                        return ImageDownloadResult(
-                            url=url,
-                            save_path=str(full_path),
-                            success=False,
-                            error="Image not found (404)",
-                        )
-
-                    response.raise_for_status()
-
-                    # Ensure directory exists
-                    full_path.parent.mkdir(parents=True, exist_ok=True)
-
-                    # Write image data
-                    with open(full_path, "wb") as f:
-                        f.write(response.content)
-
+                if response.status_code == 404:
                     return ImageDownloadResult(
                         url=url,
                         save_path=str(full_path),
-                        success=True,
+                        success=False,
+                        error="Image not found (404)",
                     )
+
+                response.raise_for_status()
+
+                # Ensure directory exists
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+
+                # Write image data
+                with open(full_path, "wb") as f:
+                    f.write(response.content)
+
+                return ImageDownloadResult(
+                    url=url,
+                    save_path=str(full_path),
+                    success=True,
+                )
 
             except httpx.TimeoutException:
                 last_error = "Download timeout"

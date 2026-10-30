@@ -138,7 +138,9 @@ class TestTMDBServiceAPIToken:
         with patch("httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.get.side_effect = httpx.TimeoutException("timeout")
-            mock_client.return_value.__aenter__.return_value = mock_instance
+            # 生产代码复用常驻客户端，不再 async with 每请求开关
+            mock_instance.is_closed = False
+            mock_client.return_value = mock_instance
 
             is_valid, error = await tmdb_service.verify_api_token("test_token")
 
