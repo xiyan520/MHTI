@@ -7,19 +7,19 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
+from server.domain.media.fingerprint_service import calculate_fingerprint
 from server.infrastructure.db import DATABASE_PATH
+from server.infrastructure.realtime import get_notifier
 from server.infrastructure.repositories.scrape_job_repository import ScrapeJobRepository
 from server.models.manual_job import ManualJobAdvancedSettings
+from server.models.organize import OrganizeMode
 from server.models.scrape_job import (
     ScrapeJob,
     ScrapeJobCreate,
     ScrapeJobSource,
     ScrapeJobStatus,
 )
-from server.models.organize import OrganizeMode
 from server.models.storage import StorageLocator
-from server.infrastructure.realtime import get_notifier
-from server.domain.media.fingerprint_service import calculate_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -265,6 +265,73 @@ class ScrapeJobService:
             history_record_id=history_record_id,
         )
 
+    async def recover_pending_jobs(
+        self,
+        *,
+        start_workers: bool = True,
+        history_service=None,
+    ) -> dict[str, int]:
+        """启动恢复：收尾 running 孤儿，并把 pending 重新入队。
+
+        内存队列随进程消失，DB 里 pending 的任务重启后没有任何消费者；而 running
+        的任务协程已经不存在，永远不会被收尾，前端只能一直转圈。两类分开处理：
+
+        - running → failed：不自动重放。进程可能死在中途搬运上，盲目重跑会与
+          半成品文件打架，交给用户确认后走「重试刮削」。
+        - pending → 重新入队：还没开始执行，重放是安全的。
+
+        Args:
+            start_workers: 是否顺带拉起 worker。测试里传 False，避免真跑队列。
+            history_service: 关联历史记录的服务，默认新建（测试可注入临时库实例）。
+
+        Returns:
+            {"requeued": 重新入队数, "failed": 标记失败的孤儿数}
+        """
+        await self._ensure_db()
+
+        from server.models.history import TaskStatus
+
+        if history_service is None:
+            from server.application.history_service import HistoryService
+
+            history_service = HistoryService()
+
+        summary = {"requeued": 0, "failed": 0}
+        now = datetime.now()
+        interrupted = "进程重启中断，文件可能未完成搬运，请确认后重试"
+
+        for job_id, history_record_id in await self._repo.list_running_with_record():
+            await self.update_job(
+                job_id,
+                status=ScrapeJobStatus.FAILED,
+                finished_at=now,
+                error_message=interrupted,
+            )
+            if history_record_id:
+                try:
+                    await history_service.update_record(
+                        history_record_id,
+                        status=TaskStatus.FAILED,
+                        error_message=interrupted,
+                    )
+                except Exception as exc:  # noqa: BLE001 - 记录收尾失败不该挡住任务恢复
+                    logger.warning(f"收尾中断的历史记录失败 {history_record_id}: {exc}")
+            summary["failed"] += 1
+
+        for job_id in await self._repo.list_ids_by_status(ScrapeJobStatus.PENDING):
+            await _scrape_queue.put(job_id)
+            summary["requeued"] += 1
+
+        if summary["requeued"] and start_workers:
+            _ensure_worker()
+
+        if summary["requeued"] or summary["failed"]:
+            logger.info(
+                f"刮削任务恢复: 重新入队 {summary['requeued']} 条，"
+                f"中断标记失败 {summary['failed']} 条"
+            )
+        return summary
+
     async def delete_jobs(self, ids: list[str]) -> int:
         """删除刮削任务"""
         await self._ensure_db()
@@ -318,17 +385,26 @@ class ScrapeJobService:
         )
 
 
-def _ensure_worker() -> None:
-    """确保后台 worker 在运行，并根据配置调整并发数"""
+def _ensure_worker() -> bool:
+    """确保后台 worker 在运行，并根据配置调整并发数。
+
+    返回是否成功把初始化排进事件循环。没有运行中的事件循环时（同步上下文、
+    或在应用 shutdown 之后调用）入队不会有任何消费者，过去这里静默 pass，
+    表现为「任务建成功但永远不动」，现在必须让调用方知道。
+    """
     global _worker_tasks, _semaphore, _current_threads
 
     async def _init_workers():
         global _semaphore, _current_threads, _worker_tasks
         from server.domain.system.config_service import ConfigService
 
-        config_service = ConfigService()
-        system_config = await config_service.get_system_config()
-        threads = system_config.scrape_threads
+        try:
+            config_service = ConfigService()
+            system_config = await config_service.get_system_config()
+            threads = system_config.scrape_threads
+        except Exception as exc:  # noqa: BLE001 - 读配置失败不该让 worker 永远起不来
+            logger.warning(f"读取刮削并发配置失败，按 1 个 worker 处理: {exc}")
+            threads = 1
 
         # 如果并发数变化，重新初始化
         if threads != _current_threads:
@@ -347,9 +423,12 @@ def _ensure_worker() -> None:
     # 在事件循环中执行初始化
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(_init_workers())
     except RuntimeError:
-        pass
+        logger.warning("刮削 worker 未启动：当前没有运行中的事件循环，队列将无人消费")
+        return False
+
+    loop.create_task(_init_workers())
+    return True
 
 
 async def _scrape_worker() -> None:
@@ -374,12 +453,17 @@ async def _scrape_worker() -> None:
 
 async def _execute_scrape_job(service: ScrapeJobService, job_id: str) -> None:
     """执行单个刮削任务"""
-    from server.bootstrap import get_scraper_service
     from server.application.history_service import HistoryService, build_record_folder_path
     from server.application.scraped_file_service import ScrapedFileService
+    from server.bootstrap import get_scraper_service
     from server.domain.system.config_service import ConfigService
+    from server.models.history import (
+        HistoryConflictType,
+        HistoryRecordCreate,
+        TaskSource,
+        TaskStatus,
+    )
     from server.models.scraper import ScrapeRequest, ScrapeStatus
-    from server.models.history import HistoryRecordCreate, TaskStatus, HistoryConflictType, TaskSource
 
     job = await service.get_job(job_id)
     if job is None:
@@ -770,3 +854,12 @@ async def shutdown_workers() -> None:
     await asyncio.gather(*_worker_tasks, return_exceptions=True)
     _worker_tasks = []
     logger.info("Scrape workers cancelled")
+
+
+async def recover_pending_jobs() -> dict[str, int]:
+    """应用启动时调用：把上次进程遗留的刮削任务接回来。
+
+    组合根（``server.main`` lifespan）在服务容器初始化之后调用一次。失败不应该
+    挡住应用启动——恢复是尽力而为的补偿动作。
+    """
+    return await ScrapeJobService().recover_pending_jobs()

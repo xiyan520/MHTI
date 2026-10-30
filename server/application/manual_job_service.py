@@ -189,6 +189,44 @@ class ManualJobService:
             error_message=error_message,
         )
 
+    async def recover_pending_jobs(self, *, start_workers: bool = True) -> dict[str, int]:
+        """启动恢复：收尾 running 孤儿，并把 pending 重新入队。
+
+        与刮削任务同构：running 说明协程已随进程消失，标失败交给用户重跑；
+        pending 还没开始，重放安全（重扫时会按文件路径与刮削任务去重）。
+
+        Args:
+            start_workers: 测试里传 False，避免真拉起队列消费者。
+        """
+        await self._ensure_db()
+
+        summary = {"requeued": 0, "failed": 0}
+        now = datetime.now()
+        interrupted = "进程重启中断，请重新执行"
+
+        for job_id in await self._repo.list_ids_by_status(ManualJobStatus.RUNNING):
+            await self.update_job_status(
+                job_id,
+                ManualJobStatus.FAILED,
+                finished_at=now,
+                error_message=interrupted,
+            )
+            summary["failed"] += 1
+
+        for job_id in await self._repo.list_ids_by_status(ManualJobStatus.PENDING):
+            await _job_queue.put(job_id)
+            summary["requeued"] += 1
+
+        if summary["requeued"] and start_workers:
+            _ensure_worker()
+
+        if summary["requeued"] or summary["failed"]:
+            logger.info(
+                f"手动任务恢复: 重新入队 {summary['requeued']} 条，"
+                f"中断标记失败 {summary['failed']} 条"
+            )
+        return summary
+
     def _row_to_job(self, row) -> ManualJob:
         """Convert database row to ManualJob."""
         # 兼容旧数据，source 可能不存在
@@ -242,11 +280,23 @@ class ManualJobService:
         )
 
 
-def _ensure_worker() -> None:
-    """Ensure background worker is running."""
+def _ensure_worker() -> bool:
+    """Ensure background worker is running.
+
+    返回是否成功拉起 worker。worker 只能在事件循环里创建：没有运行中的循环时
+    ``asyncio.create_task`` 会抛 RuntimeError。这里显式降级为「已入队但没有消费者」
+    并留下日志，避免启动恢复或测试场景下静默失败。
+    """
     global _worker_task
-    if _worker_task is None or _worker_task.done():
-        _worker_task = asyncio.create_task(_job_worker())
+    if _worker_task is not None and not _worker_task.done():
+        return True
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        logger.warning("手动任务 worker 未启动：当前没有运行中的事件循环，队列将无人消费")
+        return False
+    _worker_task = loop.create_task(_job_worker())
+    return True
 
 
 async def _job_worker() -> None:
@@ -265,8 +315,8 @@ async def _job_worker() -> None:
 
 async def _execute_job(service: ManualJobService, job_id: int) -> None:
     """Execute a single manual job - 扫描文件并投递到刮削任务队列"""
-    from server.domain.media.file_service import FileService
     from server.application.scrape_job_service import ScrapeJobService
+    from server.domain.media.file_service import FileService
     from server.models.scrape_job import ScrapeJobCreate, ScrapeJobSource
 
     job = await service.get_job(job_id)
@@ -376,7 +426,12 @@ async def _execute_job(service: ManualJobService, job_id: int) -> None:
         # 让用户在记录页能看到失败原因。
         try:
             from server.application.history_service import HistoryService
-            from server.models.history import HistoryRecordCreate, TaskStatus, TaskSource, HistoryConflictType
+            from server.models.history import (
+                HistoryConflictType,
+                HistoryRecordCreate,
+                TaskSource,
+                TaskStatus,
+            )
             duration = (datetime.now() - started_at).total_seconds()
             await HistoryService().create_record(HistoryRecordCreate(
                 task_name=f"手动任务 #{job_id} 扫描失败",
@@ -401,6 +456,11 @@ async def _execute_job(service: ManualJobService, job_id: int) -> None:
             ))
         except Exception as hist_err:
             logger.warning(f"Failed to create history record for failed manual job {job_id}: {hist_err}")
+
+
+async def recover_pending_jobs() -> dict[str, int]:
+    """应用启动时调用：把上次进程遗留的手动任务接回来。"""
+    return await ManualJobService().recover_pending_jobs()
 
 
 async def shutdown_workers() -> None:

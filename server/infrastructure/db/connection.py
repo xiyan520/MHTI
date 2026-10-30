@@ -3,16 +3,16 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import AsyncGenerator
 
 import aiosqlite
 
+from server.infrastructure.config import DATA_DIR
+
 logger = logging.getLogger(__name__)
 
-# Project root and database path
-_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
-DATABASE_PATH = _PROJECT_ROOT / "data" / "scraper.db"
+# 数据库路径跟随 DATA_DIR（默认项目根 data/），不再单独算一遍项目根
+DATABASE_PATH = DATA_DIR / "scraper.db"
 
 
 class DatabaseManager:

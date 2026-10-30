@@ -163,6 +163,14 @@ class ManualJobRepository(BaseRepository):
             "SELECT * FROM manual_jobs WHERE id = ?", (job_id,)
         )
 
+    async def list_ids_by_status(self, status: ManualJobStatus) -> list[int]:
+        """按状态列出任务 id（启动恢复重放入口）。"""
+        rows = await self._fetch_all(
+            "SELECT id FROM manual_jobs WHERE status = ? ORDER BY created_at",
+            (status.value,),
+        )
+        return [int(row[0]) for row in rows]
+
     async def delete_jobs(self, ids: list[int]) -> int:
         """删除任务并级联删除关联的刮削记录（history_records.manual_job_id）。"""
         if not ids:

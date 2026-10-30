@@ -83,6 +83,30 @@ class ScrapeJobRepository(BaseRepository):
         )
         return {row[0] for row in rows}
 
+    async def list_ids_by_status(self, status: ScrapeJobStatus) -> list[str]:
+        """按状态列出任务 id（启动恢复重放入口）。
+
+        只取 id：恢复逻辑不关心任务内容，重放后由 worker 自己读全行，
+        避免这里与 ScrapeJobCreate 的字段演化耦合。
+        """
+        rows = await self._fetch_all(
+            "SELECT id FROM scrape_jobs WHERE status = ? ORDER BY created_at",
+            (status.value,),
+        )
+        return [row[0] for row in rows]
+
+    async def list_running_with_record(self) -> list[tuple[str, str | None]]:
+        """列出 running 的孤儿任务及其历史记录 id。
+
+        进程重启后这些协程已经不存在，任务不会再有人收尾；返回历史记录 id
+        是为了把对应记录一并落到终态，否则记录页会一直显示「处理中」。
+        """
+        rows = await self._fetch_all(
+            """SELECT id, history_record_id FROM scrape_jobs
+            WHERE status = 'running' ORDER BY created_at"""
+        )
+        return [(row[0], row[1]) for row in rows]
+
     async def insert_job(
         self,
         job_id: str,

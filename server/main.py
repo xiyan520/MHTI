@@ -4,13 +4,14 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# 日志目录
-LOG_DIR = Path(__file__).parent.parent / "data" / "logs"
+from server.infrastructure.config import DATA_DIR
+
+# 日志目录（跟随 DATA_DIR，与 SQLite/密钥落在同一挂载点）
+LOG_DIR = DATA_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # 日志格式
@@ -56,20 +57,30 @@ CORS_ORIGINS = [
     "http://127.0.0.1",
 ]
 
-# Allow all private network origins (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "true").lower() == "true"
+# 是否放开 CORS。默认关闭：生产由 Caddy 同源托管，只有本地开发才需要跨源。
+# 需要局域网访问时用 CORS_ALLOW_ALL=true 显式开启。
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
+
+# 允许来源：本机 + 私网段（192.168.x.x / 10.x.x.x / 172.16-31.x.x）
+CORS_ALLOW_ALL_PATTERN = (
+    r"https?://(?:localhost|127\.0\.0\.1|\[::1\]|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?::\d+)?"
+)
 
 # Allow additional origins from environment
 if extra_origins := os.getenv("CORS_ORIGINS"):
     CORS_ORIGINS.extend(extra_origins.split(","))
 
 # API Routers
+from server.api.middleware import setup_exception_handlers, setup_middleware
 from server.api.v1.auth import router as auth_router
 from server.api.v1.config import router as config_router
 from server.api.v1.emby import router as emby_router
 from server.api.v1.files import router as files_router
+from server.api.v1.frontend_config import router as frontend_config_router
 from server.api.v1.history import router as history_router
 from server.api.v1.images import router as images_router
+from server.api.v1.logs import router as logs_router
 from server.api.v1.manual_job import router as manual_job_router
 from server.api.v1.nfo import router as nfo_router
 from server.api.v1.parser import router as parser_router
@@ -82,13 +93,10 @@ from server.api.v1.templates import router as templates_router
 from server.api.v1.tmdb import router as tmdb_router
 from server.api.v1.watcher import router as watcher_router
 from server.api.v1.websocket import router as websocket_router
-from server.api.v1.frontend_config import router as frontend_config_router
-from server.api.v1.logs import router as logs_router
 
 # Core components
-from server.bootstrap import init_services, cleanup_services, get_watcher_service
-from server.infrastructure.db import init_database, close_database
-from server.api.middleware import setup_exception_handlers, setup_middleware
+from server.bootstrap import cleanup_services, get_watcher_service, init_services
+from server.infrastructure.db import close_database, init_database
 
 
 @asynccontextmanager
@@ -104,8 +112,8 @@ async def lifespan(app: FastAPI):
     await init_database()
 
     # Initialize authentication configuration from database
-    from server.infrastructure.config import get_app_config
     from server.domain.identity.auth_config_service import get_auth_config_service_async
+    from server.infrastructure.config import get_app_config
 
     auth_config_service = await get_auth_config_service_async()
     get_app_config().set_auth_config(await auth_config_service.get_auth_config())
@@ -135,6 +143,17 @@ async def lifespan(app: FastAPI):
 
     logger.info("Log service started")
 
+    # 恢复上次进程遗留的任务：内存队列随进程消失，DB 里的 pending 不会自己跑起来
+    from server.application.manual_job_service import recover_pending_jobs as recover_manual_jobs
+    from server.application.scrape_job_service import recover_pending_jobs as recover_scrape_jobs
+
+    try:
+        scrape_recovery = await recover_scrape_jobs()
+        manual_recovery = await recover_manual_jobs()
+        logger.info(f"任务恢复完成: 刮削 {scrape_recovery}, 手动 {manual_recovery}")
+    except Exception as e:  # noqa: BLE001 - 恢复是补偿动作，坏数据不该挡住启动
+        logger.error(f"任务恢复失败: {e}")
+
     # Auto-start watcher service if enabled folders exist
     watcher = get_watcher_service()
     folders, _ = await watcher.list_folders()
@@ -150,8 +169,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down application...")
 
     # 取消后台 worker（刮削 + 手动任务），避免它们阻塞在队列上导致退出卡顿
-    from server.application.scrape_job_service import shutdown_workers as shutdown_scrape_workers
     from server.application.manual_job_service import shutdown_workers as shutdown_manual_workers
+    from server.application.scrape_job_service import shutdown_workers as shutdown_scrape_workers
     await shutdown_scrape_workers()
     await shutdown_manual_workers()
 
@@ -199,10 +218,13 @@ setup_exception_handlers(app)
 DEBUG_MODE = os.getenv("DEBUG", "false").lower() == "true"
 setup_middleware(app, debug=DEBUG_MODE)
 
-# CORS configuration
+# CORS 配置
+# 注意：allow_origins=["*"] 搭配 allow_credentials=True 是非法组合，浏览器会直接
+# 拒绝带凭据的响应；放开时改按本机/私网正则放行，既能局域网访问也不会无差别放行
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if CORS_ALLOW_ALL_ORIGINS else CORS_ORIGINS,
+    allow_origin_regex=CORS_ALLOW_ALL_PATTERN if CORS_ALLOW_ALL_ORIGINS else None,
+    allow_origins=[] if CORS_ALLOW_ALL_ORIGINS else CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],

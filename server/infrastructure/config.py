@@ -1,6 +1,7 @@
 """Application configuration - static paths + injected auth config cache."""
 
 import logging
+import os
 import secrets
 from pathlib import Path
 
@@ -11,8 +12,19 @@ logger = logging.getLogger(__name__)
 # Project root directory
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
-# Data directory (fixed under project root)
-DATA_DIR = _PROJECT_ROOT / "data"
+def _resolve_data_dir(raw: str | None) -> Path:
+    """数据目录：DATA_DIR 环境变量优先，缺省落在项目根的 data/。
+
+    环境变量长期只写在 Dockerfile / compose 里、代码却写死项目根，
+    结果换宿主机挂载点时库和密钥仍被写到别处（容器内恰好都是 /app/data 才没暴露）。
+    """
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return _PROJECT_ROOT / "data"
+
+
+# Data directory（SQLite、密钥、日志、115 客户端缓存都挂在这下面）
+DATA_DIR = _resolve_data_dir(os.getenv("DATA_DIR"))
 
 
 class AppConfig:
