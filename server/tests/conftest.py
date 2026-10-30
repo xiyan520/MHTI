@@ -7,11 +7,18 @@
 - 测试客户端基础设施
 """
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Generator
 
 import pytest
+
+# 测试必须与真实数据目录隔离。否则 API 测试会把记录写进 data/scraper.db，
+# 再反向影响「扫描目录后过滤已刮削文件」这类用例——0 字节文件的指纹完全相同，
+# 一条记录就能让整批扫描用例全部筛空。必须在 import server.* 之前设置：
+# DATA_DIR 在模块导入时就被固定下来了。
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="mhti-test-data-")
 from fastapi.testclient import TestClient
 
 from server.api.deps import AuthContext, require_auth
