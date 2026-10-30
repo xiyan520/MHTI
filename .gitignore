@@ -151,12 +151,10 @@ p115client.cache/
 .serena/
 .spec-workflow/
 
-# AI 上下文文档
+# AI 上下文文档（ARCHITECTURE.md 是正式文档，必须入库）
 CLAUDE.md
 **/CLAUDE.md
 .claude/
-ARCHITECTURE.md
-**/ARCHITECTURE.md
 docs/
 
 # BMad 敏捷工作流文档
