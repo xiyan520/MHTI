@@ -5,11 +5,16 @@ import logging
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from server.infrastructure.repositories.session_repository import SessionRepository
-from server.models.auth import SessionInfo, LoginHistoryItem, EXPIRE_HOURS_MAP, ExpireOption
+from server.models.auth import EXPIRE_HOURS_MAP, ExpireOption, LoginHistoryItem, SessionInfo
 
 logger = logging.getLogger(__name__)
+
+# refresh token 轮换宽限（秒）：多标签页同时刷新时，旧 token 在该窗口内仍可用，
+# 否则先完成刷新的那个标签页会把其它标签页踢下线
+REFRESH_GRACE_SECONDS = 60
 
 
 # 浏览器识别顺序表：(UA 中的特征串, 展示名)
@@ -84,8 +89,8 @@ def _generate_device_name(user_agent: str | None, ip_address: str | None) -> str
 class SessionService:
     """Service for managing user sessions with database connection pool."""
 
-    def __init__(self) -> None:
-        self._repo = SessionRepository()
+    def __init__(self, db_path: Path | None = None) -> None:
+        self._repo = SessionRepository(db_path)
 
     async def _get_max_sessions(self) -> int:
         """Get max sessions from config."""
@@ -175,6 +180,37 @@ class SessionService:
 
         logger.debug(f"Refresh token verified: session_id={row[0]}, user_id={row[1]}")
         return row[0], row[1]
+
+    async def rotate_refresh_token(
+        self,
+        session_id: str,
+        grace_seconds: int = REFRESH_GRACE_SECONDS,
+    ) -> str | None:
+        """轮换 refresh token：签发新值，旧值保留 grace_seconds 的宽限。
+
+        轮换的意义：refresh token 有效期 7 天且可反复续期，一旦泄露等于长期通行证；
+        每次刷新都换新的，配合宽限期又不会误伤并发刷新的其它标签页。
+
+        Returns:
+            新的 refresh token；会话已不存在时返回 None（调用方应要求重新登录）。
+        """
+        new_token = secrets.token_urlsafe(32)
+        new_hash = hashlib.sha256(new_token.encode()).hexdigest()
+        now = datetime.now(timezone.utc)
+        prev_valid_until = (now + timedelta(seconds=grace_seconds)).isoformat()
+
+        rotated = await self._repo.rotate_token_hash(
+            session_id=session_id,
+            new_hash=new_hash,
+            prev_valid_until=prev_valid_until,
+            now=now.isoformat(),
+        )
+        if not rotated:
+            logger.warning(f"Refresh token 轮换失败（会话不存在）: {session_id[:8]}...")
+            return None
+
+        logger.debug(f"Refresh token rotated: session_id={session_id[:8]}...")
+        return new_token
 
     async def revoke_session(self, session_id: str) -> bool:
         """Revoke a session by ID."""

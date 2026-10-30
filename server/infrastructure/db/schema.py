@@ -64,6 +64,10 @@ async def _create_auth_tables(db: aiosqlite.Connection) -> None:
             id TEXT PRIMARY KEY,
             user_id INTEGER NOT NULL,
             refresh_token_hash TEXT NOT NULL,
+            -- 轮换宽限：旧 refresh token 在新 token 签发后的短时间内仍然可用，
+            -- 否则多标签页同时刷新会把对方踢下线
+            prev_refresh_token_hash TEXT,
+            prev_valid_until TIMESTAMP,
             device_name TEXT,
             device_type TEXT DEFAULT 'desktop',
             ip_address TEXT,
@@ -73,6 +77,16 @@ async def _create_auth_tables(db: aiosqlite.Connection) -> None:
             last_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # 迁移: 为旧数据库补上 refresh token 轮换所需的列
+    cursor = await db.execute("PRAGMA table_info(sessions)")
+    session_columns = {row[1] for row in await cursor.fetchall()}
+    for column, ddl in (
+        ("prev_refresh_token_hash", "TEXT"),
+        ("prev_valid_until", "TIMESTAMP"),
+    ):
+        if column not in session_columns:
+            await db.execute(f"ALTER TABLE sessions ADD COLUMN {column} {ddl}")
 
     # Login history table
     await db.execute("""

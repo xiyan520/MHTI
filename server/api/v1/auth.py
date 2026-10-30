@@ -1,27 +1,27 @@
 """Authentication API routes."""
 
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 
-from server.api.deps import require_auth, AuthContext, get_client_ip
+from server.api.deps import AuthContext, get_client_ip, require_auth
+from server.domain.identity.auth_service import auth_service
+from server.domain.identity.session_service import session_service
 from server.models.auth import (
-    LoginRequest,
-    RegisterRequest,
-    TokenResponse,
     AuthStatusResponse,
-    RefreshRequest,
-    RefreshResponse,
-    SessionListResponse,
-    LoginHistoryResponse,
     ChangePasswordRequest,
     ChangePasswordResponse,
+    LoginHistoryResponse,
+    LoginRequest,
+    RefreshRequest,
+    RefreshResponse,
+    RegisterRequest,
+    SessionListResponse,
+    TokenResponse,
+    UpdateAvatarRequest,
+    UpdateAvatarResponse,
     UpdateUsernameRequest,
     UpdateUsernameResponse,
     UserProfileResponse,
-    UpdateAvatarRequest,
-    UpdateAvatarResponse,
 )
-from server.domain.identity.auth_service import auth_service
-from server.domain.identity.session_service import session_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -171,7 +171,14 @@ async def refresh_token(data: RefreshRequest) -> RefreshResponse:
 
     access_token, expires_in = auth_service.create_access_token(username, session_id)
 
-    return RefreshResponse(access_token=access_token, expires_in=expires_in)
+    # 每次刷新都轮换 refresh token：泄露的旧值最多再用到宽限期结束
+    new_refresh_token = await session_service.rotate_refresh_token(session_id)
+
+    return RefreshResponse(
+        access_token=access_token,
+        expires_in=expires_in,
+        refresh_token=new_refresh_token or data.refresh_token,
+    )
 
 
 @router.post("/logout")

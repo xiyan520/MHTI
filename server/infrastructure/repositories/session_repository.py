@@ -72,13 +72,45 @@ class SessionRepository(BaseRepository):
         )
 
     async def find_valid_by_token(self, token_hash: str, now: str) -> aiosqlite.Row | None:
+        """按 refresh token 找有效会话：当前 token，或宽限期内的上一个 token。
+
+        宽限是为了并发刷新（同一浏览器多标签页同时过期）不会互相踢下线；
+        超出宽限后旧 token 立即失效。
+        """
         return await self._fetch_one(
             """
             SELECT id, user_id FROM sessions
-            WHERE refresh_token_hash = ? AND expires_at > ?
+            WHERE expires_at > ?
+              AND (
+                    refresh_token_hash = ?
+                 OR (prev_refresh_token_hash = ?
+                     AND prev_valid_until IS NOT NULL
+                     AND prev_valid_until > ?)
+              )
             """,
-            (token_hash, now),
+            (now, token_hash, token_hash, now),
         )
+
+    async def rotate_token_hash(
+        self,
+        *,
+        session_id: str,
+        new_hash: str,
+        prev_valid_until: str,
+        now: str,
+    ) -> bool:
+        """把当前 token 降级为宽限期内的「上一个 token」，并写入新 token 哈希。"""
+        return await self._execute(
+            """
+            UPDATE sessions
+            SET prev_refresh_token_hash = refresh_token_hash,
+                prev_valid_until = ?,
+                refresh_token_hash = ?,
+                last_used_at = ?
+            WHERE id = ?
+            """,
+            (prev_valid_until, new_hash, now, session_id),
+        ) > 0
 
     async def touch_session(self, session_id: str, now: str) -> None:
         await self._execute(

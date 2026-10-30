@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-
 # 有效期选项类型
 ExpireOption = Literal["1h", "1d", "7d", "30d", "never"]
 
@@ -57,6 +56,8 @@ class RefreshResponse(BaseModel):
 
     access_token: str
     expires_in: int
+    # 轮换后的 refresh token：客户端必须替换本地旧值（旧值仅在宽限期内可用）
+    refresh_token: str | None = None
 
 
 class AuthStatusResponse(BaseModel):

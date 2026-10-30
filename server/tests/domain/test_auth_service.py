@@ -6,9 +6,9 @@
 - 刷新 token 过期时间计算
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from server.domain.identity.auth_service import AuthService
 from server.models.auth import AuthConfig
@@ -65,16 +65,15 @@ class TestPasswordHashing:
     def test_verify_password_correct(self, auth_service):
         """测试正确密码验证成功。"""
         password = "correct_password"
-        hash_value, salt = auth_service._hash_password(password)
-        stored_hash = f"{salt}${hash_value}"
+        # 当前存储格式：算法$迭代数$盐$哈希
+        stored_hash = auth_service._format_password_hash(password)
 
         assert auth_service._verify_password(password, stored_hash) is True
 
     def test_verify_password_incorrect(self, auth_service):
         """测试错误密码验证失败。"""
         password = "correct_password"
-        hash_value, salt = auth_service._hash_password(password)
-        stored_hash = f"{salt}${hash_value}"
+        stored_hash = auth_service._format_password_hash(password)
 
         assert auth_service._verify_password("wrong_password", stored_hash) is False
 
@@ -222,8 +221,7 @@ class TestAuthServiceAsync:
     async def test_verify_credentials_success(self, auth_service):
         """测试正确凭据验证成功。"""
         password = "test_password"
-        hash_value, salt = auth_service._hash_password(password)
-        stored_hash = f"{salt}${hash_value}"
+        stored_hash = auth_service._format_password_hash(password)
 
         mock_db = AsyncMock()
         mock_cursor = AsyncMock()
@@ -245,8 +243,7 @@ class TestAuthServiceAsync:
     async def test_verify_credentials_wrong_password(self, auth_service):
         """测试错误密码验证失败。"""
         password = "test_password"
-        hash_value, salt = auth_service._hash_password(password)
-        stored_hash = f"{salt}${hash_value}"
+        stored_hash = auth_service._format_password_hash(password)
 
         mock_db = AsyncMock()
         mock_cursor = AsyncMock()
@@ -282,3 +279,55 @@ class TestAuthServiceAsync:
             result = await auth_service.verify_credentials("nonexistent", "password")
 
         assert result is False
+
+
+
+class TestPasswordHashUpgrade:
+    """口令哈希格式升级：新格式自描述，旧格式仍可验证并在登录时升级。"""
+
+    def test_new_hash_is_self_describing(self, auth_service):
+        stored = auth_service._format_password_hash("pw")
+        parts = stored.split("$")
+
+        assert parts[0] == "pbkdf2_sha256"
+        assert int(parts[1]) == auth_service._PBKDF2_ITERATIONS
+        assert len(parts) == 4
+
+    def test_legacy_hash_still_verifies(self, auth_service):
+        # 旧格式 salt$hash，当年写死 10 万轮
+        hash_value, salt = auth_service._hash_password("pw", iterations=100_000)
+        legacy = f"{salt}${hash_value}"
+
+        assert auth_service._verify_password("pw", legacy) is True
+
+    def test_legacy_hash_is_flagged_for_rehash(self, auth_service):
+        hash_value, salt = auth_service._hash_password("pw", iterations=100_000)
+
+        assert auth_service._needs_rehash(f"{salt}${hash_value}") is True
+        assert auth_service._needs_rehash(auth_service._format_password_hash("pw")) is False
+
+    def test_wrong_password_is_rejected(self, auth_service):
+        stored = auth_service._format_password_hash("pw")
+
+        assert auth_service._verify_password("bad", stored) is False
+
+    def test_malformed_hash_is_rejected(self, auth_service):
+        assert auth_service._verify_password("pw", "not-a-hash") is False
+        assert auth_service._verify_password("pw", "pbkdf2_sha256$abc$salt$hash") is False
+
+    @pytest.mark.asyncio
+    async def test_login_upgrades_legacy_hash_in_place(self, auth_service):
+        hash_value, salt = auth_service._hash_password("pw", iterations=100_000)
+        legacy = f"{salt}${hash_value}"
+
+        auth_service._repo = MagicMock()
+        auth_service._repo.get_password_hash = AsyncMock(return_value=legacy)
+        auth_service._repo.update_password = AsyncMock()
+
+        assert await auth_service.verify_credentials("admin", "pw") is True
+
+        auth_service._repo.update_password.assert_awaited_once()
+        _username, new_hash = auth_service._repo.update_password.await_args.args
+        assert _username == "admin"
+        assert new_hash.startswith("pbkdf2_sha256$600000$")
+        assert auth_service._verify_password("pw", new_hash) is True

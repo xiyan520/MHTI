@@ -10,7 +10,7 @@ from jose import JWTError, jwt
 
 from server.infrastructure.db import get_db_manager
 from server.infrastructure.repositories.auth_repository import AuthRepository
-from server.models.auth import ExpireOption, EXPIRE_HOURS_MAP, AuthConfig
+from server.models.auth import EXPIRE_HOURS_MAP, AuthConfig, ExpireOption
 
 logger = logging.getLogger(__name__)
 
@@ -51,20 +51,60 @@ class AuthService:
         """Clear config cache to force reload."""
         self._config_cache = None
 
-    def _hash_password(self, password: str, salt: str | None = None) -> tuple[str, str]:
+    # 口令哈希：pbkdf2_sha256$<iterations>$<salt>$<hash>，参数随哈希一起存，
+    # 以后调高迭代数不需要强制所有人改密——登录成功时就地升级。
+    _PBKDF2_ALGORITHM = "pbkdf2_sha256"
+    _PBKDF2_ITERATIONS = 600_000
+    _LEGACY_ITERATIONS = 100_000
+
+    def _hash_password(
+        self,
+        password: str,
+        salt: str | None = None,
+        iterations: int | None = None,
+    ) -> tuple[str, str]:
         """Hash password with salt. Returns (hash, salt)."""
         if salt is None:
             salt = secrets.token_hex(16)
-        hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 100000)
+        rounds = iterations or self._PBKDF2_ITERATIONS
+        hashed = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), rounds)
         return hashed.hex(), salt
 
+    def _format_password_hash(self, password: str) -> str:
+        """生成自描述的哈希串：算法$迭代数$盐$哈希。"""
+        hash_value, salt = self._hash_password(password)
+        return f"{self._PBKDF2_ALGORITHM}${self._PBKDF2_ITERATIONS}${salt}${hash_value}"
+
+    @classmethod
+    def _parse_password_hash(cls, stored_hash: str) -> tuple[int, str, str] | None:
+        """解析存储格式，返回 (迭代数, 盐, 哈希)；无法识别时返回 None。"""
+        parts = stored_hash.split("$")
+        if len(parts) == 2:
+            # 旧格式 salt$hash：固定 10 万轮（当年的参数没有写进串里）
+            return cls._LEGACY_ITERATIONS, parts[0], parts[1]
+        if len(parts) == 4 and parts[0] == cls._PBKDF2_ALGORITHM:
+            try:
+                return int(parts[1]), parts[2], parts[3]
+            except ValueError:
+                return None
+        return None
+
     def _verify_password(self, password: str, stored_hash: str) -> bool:
-        """Verify password against stored hash (format: salt$hash)."""
-        if "$" not in stored_hash:
+        """Verify password against stored hash（新旧两种格式都支持）。"""
+        parsed = self._parse_password_hash(stored_hash)
+        if parsed is None:
             return False
-        salt, hash_value = stored_hash.split("$", 1)
-        computed_hash, _ = self._hash_password(password, salt)
-        return secrets.compare_digest(computed_hash, hash_value)
+        iterations, salt, expected = parsed
+        computed_hash, _ = self._hash_password(password, salt, iterations)
+        return secrets.compare_digest(computed_hash, expected)
+
+    def _needs_rehash(self, stored_hash: str) -> bool:
+        """旧格式或迭代数偏低时需要升级。"""
+        parsed = self._parse_password_hash(stored_hash)
+        if parsed is None:
+            return False
+        iterations, _salt, _hash = parsed
+        return iterations < self._PBKDF2_ITERATIONS
 
     async def is_initialized(self) -> bool:
         """Check if admin account exists."""
@@ -75,8 +115,7 @@ class AuthService:
         if await self.is_initialized():
             return False
 
-        hash_value, salt = self._hash_password(password)
-        password_hash = f"{salt}${hash_value}"
+        password_hash = self._format_password_hash(password)
 
         try:
             await self._repo.insert_admin(username, password_hash)
@@ -88,11 +127,25 @@ class AuthService:
         return True
 
     async def verify_credentials(self, username: str, password: str) -> bool:
-        """Verify username and password from database."""
+        """Verify username and password from database.
+
+        校验通过但哈希参数过旧（旧格式 / 迭代数偏低）时就地升级：
+        用户不必因为换参数而被迫改密，库里也不会长期留着弱哈希。
+        """
         stored_hash = await self._repo.get_password_hash(username)
         if not stored_hash:
             return False
-        return self._verify_password(password, stored_hash)
+        if not self._verify_password(password, stored_hash):
+            return False
+
+        if self._needs_rehash(stored_hash):
+            try:
+                await self._repo.update_password(username, self._format_password_hash(password))
+                logger.info(f"口令哈希已升级到 {self._PBKDF2_ITERATIONS} 轮: {username}")
+            except Exception as e:  # noqa: BLE001 - 升级失败不能影响本次登录
+                logger.warning(f"口令哈希升级失败（不影响登录）: {e}")
+
+        return True
 
     async def get_user_id(self, username: str) -> int | None:
         """Get user ID by username."""
@@ -192,8 +245,7 @@ class AuthService:
         if not await self.verify_credentials(username, old_password):
             return False
 
-        hash_value, salt = self._hash_password(new_password)
-        password_hash = f"{salt}${hash_value}"
+        password_hash = self._format_password_hash(new_password)
 
         await self._repo.update_password(username, password_hash)
         logger.info(f"Password changed for user: {username}")
