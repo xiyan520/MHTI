@@ -3,13 +3,13 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_image_service, require_auth
+from server.domain.artifacts.image_service import ImageService
 from server.models.image import (
     BatchDownloadRequest,
     BatchDownloadResponse,
     ImageDownloadRequest,
     ImageDownloadResult,
 )
-from server.domain.artifacts.image_service import ImageService
 
 router = APIRouter(prefix="/api/images", tags=["images"], dependencies=[Depends(require_auth)])
 

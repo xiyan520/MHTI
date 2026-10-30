@@ -6,8 +6,8 @@
 
 from fastapi import APIRouter, Depends
 
-from server.api.deps import require_auth
-from server.api.deps import get_scraper_service
+from server.api.deps import get_scraper_service, require_auth
+from server.application.scraping.service import ScraperService
 from server.models.scraper import (
     BatchScrapeRequest,
     BatchScrapeResponse,
@@ -16,7 +16,6 @@ from server.models.scraper import (
     ScrapeRequest,
     ScrapeResult,
 )
-from server.application.scraping.service import ScraperService
 
 router = APIRouter(prefix="/api/scraper", tags=["scraper"], dependencies=[Depends(require_auth)])
 

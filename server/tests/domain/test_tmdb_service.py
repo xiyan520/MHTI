@@ -1,13 +1,14 @@
 """Unit tests for TMDBService."""
 
-import pytest
-from pathlib import Path
 import tempfile
-from unittest.mock import AsyncMock, patch, MagicMock
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from server.common.exceptions import TMDBTimeoutError
 from server.domain.metadata.tmdb_service import TMDBService
 from server.domain.system.config_service import ConfigService
-from server.common.exceptions import TMDBTimeoutError
 
 
 @pytest.fixture

@@ -8,8 +8,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from server.common.http import get_client_ip
 from server.common.exceptions import AppException, ErrorCode
+from server.common.http import get_client_ip
 
 logger = logging.getLogger(__name__)
 

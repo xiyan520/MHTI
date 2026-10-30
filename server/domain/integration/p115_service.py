@@ -7,11 +7,11 @@ import os
 import threading
 from contextlib import contextmanager
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
 
 from server.common.exceptions import ConfigurationError, FolderNotFoundError, InvalidFolderError
+from server.domain.system.config_service import ConfigService
 from server.infrastructure.config import DATA_DIR
 from server.models.cloud_115 import (
     Cloud115Account,
@@ -25,7 +25,6 @@ from server.models.cloud_115 import (
     Cloud115Status,
     Cloud115Storage,
 )
-from server.domain.system.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 

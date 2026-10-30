@@ -9,7 +9,7 @@ from server.models.history import ScrapeLogStep
 from server.models.manual_job import ManualJobAdvancedSettings
 from server.models.organize import OrganizeMode
 from server.models.storage import StorageLocator
-from server.models.tmdb import TMDBSearchResult, TMDBSeries, TMDBEpisode
+from server.models.tmdb import TMDBEpisode, TMDBSearchResult, TMDBSeries
 
 
 class ScrapeStatus(str, Enum):

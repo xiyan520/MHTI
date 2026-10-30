@@ -1,7 +1,8 @@
 """TMDB data models."""
 
-from pydantic import BaseModel
 from datetime import date
+
+from pydantic import BaseModel
 
 
 class TMDBSearchResult(BaseModel):

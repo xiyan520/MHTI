@@ -2,7 +2,7 @@
 
 import pytest
 
-from server.domain.system.template_service import TemplateService, VALID_VARIABLES
+from server.domain.system.template_service import VALID_VARIABLES, TemplateService
 
 
 @pytest.fixture

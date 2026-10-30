@@ -1,16 +1,16 @@
 """Unit tests for ImageService."""
 
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 
-from server.domain.artifacts.image_service import ImageService, RETRY_DELAYS
+from server.domain.artifacts.image_service import ImageService
+from server.models.config import ProxyConfig
 from server.models.image import ImageDownloadRequest, ImageSize
 from server.models.system import SystemConfig
-from server.models.config import ProxyConfig
 
 
 @pytest.fixture

@@ -10,6 +10,7 @@ from server.common.exceptions import (
     TMDBNotFoundError,
     TMDBTimeoutError,
 )
+from server.domain.system.config_service import ConfigService
 from server.models.config import ApiTokenStatus
 from server.models.tmdb import (
     TMDBEpisode,
@@ -18,7 +19,6 @@ from server.models.tmdb import (
     TMDBSeason,
     TMDBSeries,
 )
-from server.domain.system.config_service import ConfigService
 
 TMDB_BASE_URL = "https://www.themoviedb.org"
 TMDB_API_BASE_URL = "https://api.themoviedb.org/3"

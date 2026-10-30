@@ -245,7 +245,7 @@ class TMDBNotFoundError(TMDBError):
     """Raised when TMDB resource is not found."""
 
     def __init__(self, resource_type: str = "剧集", resource_id: int | str | None = None) -> None:
-        details = {"resource_type": resource_type}
+        details: dict[str, Any] = {"resource_type": resource_type}
         if resource_id:
             details["resource_id"] = resource_id
         super().__init__(

@@ -3,9 +3,9 @@
 import pytest
 
 from server.common.exceptions import FolderNotFoundError, InvalidFolderError
+from server.domain.media.file_service import SUPPORTED_VIDEO_EXTENSIONS, FileService
 from server.models.file import DirectoryEntry, ScanRequest
 from server.models.storage import StorageLocator, StorageProvider
-from server.domain.media.file_service import SUPPORTED_VIDEO_EXTENSIONS, FileService
 
 
 class TestFileService:

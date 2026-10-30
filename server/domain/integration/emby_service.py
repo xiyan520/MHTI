@@ -5,6 +5,7 @@ import time
 
 import httpx
 
+from server.domain.system.config_service import ConfigService
 from server.models.emby import (
     ConflictCheckRequest,
     ConflictCheckResult,
@@ -17,7 +18,6 @@ from server.models.emby import (
     EmbyStatus,
     EmbyTestResponse,
 )
-from server.domain.system.config_service import ConfigService
 
 logger = logging.getLogger(__name__)
 

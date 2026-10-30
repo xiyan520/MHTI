@@ -51,7 +51,7 @@ async def websocket_endpoint(websocket: WebSocket):
         heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket, client_id))
 
         # 启动超时检测任务
-        last_pong_time = asyncio.get_event_loop().time()
+        last_pong_time = asyncio.get_running_loop().time()
         timeout_task = asyncio.create_task(_timeout_monitor(websocket, client_id, manager, last_pong_time))
 
         while True:
@@ -60,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg_type == "ping":
                 # 客户端心跳响应
-                last_pong_time = asyncio.get_event_loop().time()
+                last_pong_time = asyncio.get_running_loop().time()
                 # 更新超时任务
                 if timeout_task:
                     timeout_task.cancel()
@@ -131,7 +131,7 @@ async def _heartbeat_loop(websocket: WebSocket, client_id: str):
         while True:
             await asyncio.sleep(HEARTBEAT_INTERVAL)
             try:
-                await websocket.send_json({"type": "ping", "timestamp": asyncio.get_event_loop().time()})
+                await websocket.send_json({"type": "ping", "timestamp": asyncio.get_running_loop().time()})
             except Exception as e:
                 logger.warning(f"[{client_id}] 发送心跳失败: {e}")
                 break
@@ -148,7 +148,7 @@ async def _timeout_monitor(websocket: WebSocket, client_id: str, manager, last_p
     try:
         while True:
             await asyncio.sleep(10)  # 每10秒检查一次
-            current_time = asyncio.get_event_loop().time()
+            current_time = asyncio.get_running_loop().time()
             if current_time - last_pong_time > CLIENT_TIMEOUT:
                 logger.warning(f"[{client_id}] 客户端超时（{CLIENT_TIMEOUT}s 无响应），主动断开")
                 try:

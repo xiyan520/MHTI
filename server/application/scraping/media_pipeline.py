@@ -11,9 +11,9 @@ from server.models.emby import ConflictCheckRequest, ConflictCheckResult, Confli
 from server.models.tmdb import TMDBSeason, TMDBSeries
 
 if TYPE_CHECKING:
-    from server.domain.integration.emby_service import EmbyService
     from server.domain.artifacts.image_service import ImageService
     from server.domain.artifacts.subtitle_service import SubtitleService
+    from server.domain.integration.emby_service import EmbyService
 
 logger = logging.getLogger(__name__)
 

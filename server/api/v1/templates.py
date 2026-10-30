@@ -3,13 +3,13 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_template_service, require_auth
+from server.domain.system.template_service import TemplateService
 from server.models.template import (
     NamingTemplate,
     TemplatePreviewRequest,
     TemplatePreviewResponse,
     TemplateValidationResult,
 )
-from server.domain.system.template_service import TemplateService
 
 router = APIRouter(prefix="/api/templates", tags=["templates"], dependencies=[Depends(require_auth)])
 

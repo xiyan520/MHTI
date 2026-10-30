@@ -1,20 +1,20 @@
 """Unit tests for P115Service."""
 
-import aiosqlite
 import os
 from datetime import datetime
 from types import SimpleNamespace
 from urllib.error import HTTPError
 
+import aiosqlite
 import pytest
 
-from server.bootstrap import get_container, get_service
-from server.common.service_names import Services
-from server.common.exceptions import ConfigurationError, FolderNotFoundError, InvalidFolderError
-from server.models.cloud_115 import Cloud115Config
-from server.domain.system.config_service import ConfigService
 import server.domain.integration.p115_service as p115_service_module
+from server.bootstrap import get_container, get_service
+from server.common.exceptions import ConfigurationError, FolderNotFoundError, InvalidFolderError
+from server.common.service_names import Services
 from server.domain.integration.p115_service import P115Service
+from server.domain.system.config_service import ConfigService
+from server.models.cloud_115 import Cloud115Config
 
 
 @pytest.fixture

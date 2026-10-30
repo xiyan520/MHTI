@@ -1,11 +1,12 @@
 """Unit tests for NFO service."""
 
-import pytest
 from datetime import date
 
+import pytest
+
 from server.domain.artifacts.nfo_service import NFOService
-from server.models.nfo import TVShowNFO, SeasonNFO, EpisodeNFO
-from server.models.tmdb import TMDBSeries, TMDBSeason, TMDBEpisode
+from server.models.nfo import EpisodeNFO, SeasonNFO, TVShowNFO
+from server.models.tmdb import TMDBEpisode, TMDBSeason, TMDBSeries
 
 
 @pytest.fixture

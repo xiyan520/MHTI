@@ -3,21 +3,24 @@
 import asyncio
 import json
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
-from server.application.history_actions import HistoryScrapeActions
-from server.application.history_files import HistoryFileService
-from server.api.deps import require_auth
 from server.api.deps import (
     get_config_service,
     get_history_service,
     get_manual_job_service,
-    get_scraped_file_service,
     get_scrape_job_service,
+    get_scraped_file_service,
+    require_auth,
 )
+from server.application.history_actions import HistoryScrapeActions
+from server.application.history_files import HistoryFileService
+from server.application.history_service import HistoryService
+from server.application.manual_job_service import ManualJobService
+from server.application.scrape_job_service import ScrapeJobService
 from server.application.scraped_file_service import ScrapedFileService
 from server.domain.system.config_service import ConfigService
 from server.models.history import (
@@ -25,18 +28,15 @@ from server.models.history import (
     HistoryFileDeleteRequest,
     HistoryFileDeleteResponse,
     HistoryFileListResponse,
+    HistoryListResponse,
     HistoryRecord,
     HistoryRecordCreate,
     HistoryRecordDetail,
-    HistoryListResponse,
     TaskStatus,
     UndoResponse,
 )
 from server.models.organize import OrganizeMode
 from server.models.scraper import ScrapeByIdRequest
-from server.application.history_service import HistoryService
-from server.application.manual_job_service import ManualJobService
-from server.application.scrape_job_service import ScrapeJobService
 
 router = APIRouter(prefix="/api/history", tags=["history"], dependencies=[Depends(require_auth)])
 

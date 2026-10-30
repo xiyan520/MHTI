@@ -10,9 +10,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
+from watchdog.events import FileCreatedEvent, FileMovedEvent, FileSystemEventHandler
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedEvent
 
+from server.domain.media.file_service import SUPPORTED_VIDEO_EXTENSIONS as VIDEO_EXTENSIONS
 from server.infrastructure.db import DATABASE_PATH
 from server.infrastructure.repositories.watcher_repository import WatcherRepository
 from server.models.watcher import (
@@ -28,8 +29,7 @@ from server.models.watcher import (
 
 logger = logging.getLogger(__name__)
 
-# Video file extensions to watch — 与 file_service.SUPPORTED_VIDEO_EXTENSIONS 保持一致
-from server.domain.media.file_service import SUPPORTED_VIDEO_EXTENSIONS as VIDEO_EXTENSIONS
+# 监听的视频扩展名与 file_service.SUPPORTED_VIDEO_EXTENSIONS 保持一致
 
 
 class VideoFileHandler(FileSystemEventHandler):
@@ -536,9 +536,6 @@ class WatcherService:
 
     async def get_status(self) -> WatcherStatusResponse:
         """Get watcher status."""
-        folders, _ = await self.list_folders()
-        active = sum(1 for f in folders if f.enabled)
-
         return WatcherStatusResponse(
             status=self._status,
             active_watchers=len(self._strategies),

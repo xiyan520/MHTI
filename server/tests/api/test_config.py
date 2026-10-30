@@ -13,9 +13,11 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from server.main import app
 from server.bootstrap import get_config_service, get_p115_service, get_tmdb_service
-from server.models.config import ApiTokenStatus
+from server.domain.integration.p115_service import P115Service
+from server.domain.metadata.tmdb_service import TMDBService
+from server.domain.system.config_service import ConfigService
+from server.main import app
 from server.models.cloud_115 import (
     Cloud115Account,
     Cloud115AccountInfo,
@@ -27,9 +29,7 @@ from server.models.cloud_115 import (
     Cloud115Status,
     Cloud115Storage,
 )
-from server.domain.system.config_service import ConfigService
-from server.domain.integration.p115_service import P115Service
-from server.domain.metadata.tmdb_service import TMDBService
+from server.models.config import ApiTokenStatus
 
 
 @pytest.fixture

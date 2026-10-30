@@ -3,11 +3,15 @@
 从 api/history.py 下沉，路由只做协议转换与校验。
 """
 
-from datetime import date, datetime
 import logging
+from datetime import date, datetime
 
 from fastapi import HTTPException
 
+from server.application.history_service import HistoryService, build_record_folder_path
+from server.application.rescrape_source import RescrapeInput, RescrapeSource
+from server.application.scrape_job_service import ScrapeJobService
+from server.application.scraped_file_service import ScrapedFileService
 from server.models.history import (
     HistoryRecord,
     HistoryRecordDetail,
@@ -17,11 +21,7 @@ from server.models.history import (
     TaskStatus,
 )
 from server.models.scraper import ScrapeByIdRequest
-from server.models.tmdb import TMDBEpisode, TMDBSeries, TMDBSeason
-from server.application.history_service import HistoryService, build_record_folder_path
-from server.application.rescrape_source import RescrapeInput, RescrapeSource
-from server.application.scrape_job_service import ScrapeJobService
-from server.application.scraped_file_service import ScrapedFileService
+from server.models.tmdb import TMDBEpisode, TMDBSeason, TMDBSeries
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,8 @@
 """NFO data models for Jellyfin/Emby compatibility."""
 
-from pydantic import BaseModel
 from datetime import date
+
+from pydantic import BaseModel
 
 
 class TVShowNFO(BaseModel):

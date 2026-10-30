@@ -5,13 +5,13 @@ from pathlib import Path
 
 import httpx
 
+from server.domain.system.config_service import ConfigService
 from server.models.image import (
     BatchDownloadResponse,
     ImageDownloadRequest,
     ImageDownloadResult,
     ImageSize,
 )
-from server.domain.system.config_service import ConfigService
 
 RETRY_DELAYS = [1, 2, 4]  # Exponential backoff
 

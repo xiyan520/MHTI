@@ -3,8 +3,8 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_nfo_service, require_auth
-from server.models.nfo import EpisodeNFO, NFOResponse, SeasonNFO, TVShowNFO
 from server.domain.artifacts.nfo_service import NFOService
+from server.models.nfo import EpisodeNFO, NFOResponse, SeasonNFO, TVShowNFO
 
 router = APIRouter(prefix="/api/nfo", tags=["nfo"], dependencies=[Depends(require_auth)])
 

@@ -1,9 +1,8 @@
 """Manual job API endpoints."""
-from server.api.deps import require_auth
-
 from fastapi import APIRouter, Depends, Query
 
-from server.api.deps import get_manual_job_service
+from server.api.deps import get_manual_job_service, require_auth
+from server.application.manual_job_service import ManualJobService
 from server.models.manual_job import (
     ManualJob,
     ManualJobCreate,
@@ -11,7 +10,6 @@ from server.models.manual_job import (
     ManualJobListResponse,
     ManualJobStatus,
 )
-from server.application.manual_job_service import ManualJobService
 
 router = APIRouter(prefix="/api/manual-jobs", tags=["manual-jobs"], dependencies=[Depends(require_auth)])
 

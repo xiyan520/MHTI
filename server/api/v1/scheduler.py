@@ -2,15 +2,14 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.api.deps import require_auth
-from server.api.deps import get_scheduler_service
+from server.api.deps import get_scheduler_service, require_auth
+from server.application.scheduler_service import SchedulerService
 from server.models.scheduler import (
     ScheduledTaskCreate,
-    ScheduledTaskUpdate,
-    ScheduledTaskResponse,
     ScheduledTaskListResponse,
+    ScheduledTaskResponse,
+    ScheduledTaskUpdate,
 )
-from server.application.scheduler_service import SchedulerService
 
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"], dependencies=[Depends(require_auth)])
 

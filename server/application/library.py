@@ -3,12 +3,12 @@
 从 api/files.py 下沉，路由只做协议转换。
 """
 
+from server.application.history_service import HistoryService
 from server.common.exceptions import validation_error
-from server.models.file import ScannedFile
-from server.models.storage import StorageLocator, StorageProvider
 from server.domain.media.file_service import FileService
 from server.domain.media.fingerprint_service import calculate_fingerprint
-from server.application.history_service import HistoryService
+from server.models.file import ScannedFile
+from server.models.storage import StorageLocator, StorageProvider
 
 
 class FolderScanUseCase:

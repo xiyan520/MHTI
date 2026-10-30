@@ -6,11 +6,11 @@
 由调用方落库；这两个测试钉住回调的触发时机与「不触发」的分支。
 """
 
-import aiosqlite
 from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock
 
+import aiosqlite
 import pytest
 
 from server.application.history_service import HistoryService
@@ -26,9 +26,9 @@ from server.models.history import HistoryRecordCreate, TaskStatus
 from server.models.organize import OrganizeMode
 from server.models.scraper import ScrapeRequest, ScrapeStatus
 from server.models.tmdb import (
+    TMDBEpisode,
     TMDBSearchResponse,
     TMDBSearchResult,
-    TMDBEpisode,
     TMDBSeason,
     TMDBSeries,
 )

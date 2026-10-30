@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import aiosqlite
-
 from server.infrastructure.repositories.base import BaseRepository
 
 

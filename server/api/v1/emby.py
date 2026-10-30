@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends
 
-from server.api.deps import require_auth
-from server.api.deps import get_emby_service
+from server.api.deps import get_emby_service, require_auth
+from server.domain.integration.emby_service import EmbyService
 from server.models.emby import (
     ConflictCheckRequest,
     ConflictCheckResult,
@@ -13,7 +13,6 @@ from server.models.emby import (
     EmbyStatus,
     EmbyTestResponse,
 )
-from server.domain.integration.emby_service import EmbyService
 
 router = APIRouter(prefix="/api/emby", tags=["emby"], dependencies=[Depends(require_auth)])
 

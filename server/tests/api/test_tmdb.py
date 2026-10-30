@@ -4,25 +4,23 @@
 使用 conftest.py 中的 auth_client fixture 绕过认证。
 """
 
-import pytest
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
-import httpx
-
-from server.main import app
-from server.api.deps import require_auth, AuthContext
 from server.bootstrap import get_tmdb_service
-from server.common.exceptions import TMDBTimeoutError, TMDBConnectionError, TMDBNotFoundError
-from server.domain.system.config_service import ConfigService
+from server.common.exceptions import TMDBConnectionError, TMDBTimeoutError
 from server.domain.metadata.tmdb_service import TMDBService
+from server.domain.system.config_service import ConfigService
+from server.main import app
 from server.models.tmdb import (
+    TMDBEpisode,
     TMDBSearchResponse,
     TMDBSearchResult,
-    TMDBSeries,
     TMDBSeason,
-    TMDBEpisode,
+    TMDBSeries,
 )
 
 

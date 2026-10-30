@@ -5,16 +5,15 @@ import re
 from pathlib import Path
 from typing import Any
 
+from server.domain.system.config_service import NAMING_CONFIG_KEY
 from server.infrastructure.db import DATABASE_PATH
 from server.infrastructure.repositories.template_repository import TemplateRepository
-from server.domain.system.config_service import NAMING_CONFIG_KEY
 from server.models.template import (
     NamingTemplate,
     TemplatePreviewResponse,
     TemplateValidationResult,
     TemplateVariable,
 )
-
 
 # Default sample data for preview
 DEFAULT_SAMPLE_DATA = {

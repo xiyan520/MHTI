@@ -201,7 +201,7 @@ class HistoryRepository(BaseRepository):
                 # 快速模式：第一页且无筛选时，假设 total 足够大
                 # 多查一条判断是否有更多数据
                 cursor = await db.execute(
-                    f"""
+                    """
                     SELECT * FROM history_records
                     ORDER BY executed_at DESC
                     LIMIT ? OFFSET ?
@@ -210,8 +210,6 @@ class HistoryRepository(BaseRepository):
                 )
                 rows = await cursor.fetchall()
 
-                # 判断是否有更多数据
-                has_more = len(rows) > limit
                 records = list(rows[:limit])
 
                 # 如果数据不足 limit+1 条，说明已经到最后一页

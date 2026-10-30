@@ -1,9 +1,8 @@
 """Scrape job API endpoints - 文件刮削任务 API"""
-from server.api.deps import require_auth
-
 from fastapi import APIRouter, Depends, Query
 
-from server.api.deps import get_scrape_job_service
+from server.api.deps import get_scrape_job_service, require_auth
+from server.application.scrape_job_service import ScrapeJobService
 from server.models.scrape_job import (
     ScrapeJob,
     ScrapeJobCreate,
@@ -11,7 +10,6 @@ from server.models.scrape_job import (
     ScrapeJobSource,
     ScrapeJobStatus,
 )
-from server.application.scrape_job_service import ScrapeJobService
 
 router = APIRouter(prefix="/api/scrape-jobs", tags=["scrape-jobs"], dependencies=[Depends(require_auth)])
 

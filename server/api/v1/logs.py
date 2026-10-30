@@ -6,17 +6,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
-from server.api.deps import require_auth
-from server.api.deps import get_log_service
+from server.api.deps import get_log_service, require_auth
+from server.domain.system.log_service import LogService
 from server.models.log import (
-    LogConfig,
     LogConfigUpdate,
     LogEntry,
     LogLevel,
     LogQuery,
-    LogStats,
 )
-from server.domain.system.log_service import LogService
 
 router = APIRouter(
     prefix="/api/logs",

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_subtitle_service, require_auth
+from server.domain.artifacts.subtitle_service import SubtitleService
 from server.models.subtitle import (
     BatchSubtitleRenameRequest,
     BatchSubtitleRenameResponse,
@@ -13,7 +14,6 @@ from server.models.subtitle import (
     SubtitleScanRequest,
     SubtitleScanResponse,
 )
-from server.domain.artifacts.subtitle_service import SubtitleService
 
 router = APIRouter(prefix="/api/subtitles", tags=["subtitles"], dependencies=[Depends(require_auth)])
 

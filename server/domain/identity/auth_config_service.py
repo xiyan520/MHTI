@@ -5,8 +5,8 @@ import logging
 import secrets
 from datetime import datetime, timezone
 
-from server.infrastructure.security import encrypt_value, decrypt_value
 from server.infrastructure.repositories.auth_config_repository import AuthConfigRepository
+from server.infrastructure.security import decrypt_value, encrypt_value
 from server.models.auth import AuthConfig
 
 logger = logging.getLogger(__name__)

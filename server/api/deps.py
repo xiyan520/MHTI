@@ -3,9 +3,7 @@
 from typing import Protocol
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-
-from server.common.http import get_client_ip  # noqa: F401  统一依赖入口
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # ---- 容器装配转发（routers 统一从本模块导入依赖 getter）----
 from server.bootstrap import (  # noqa: E402,F401
@@ -18,19 +16,20 @@ from server.bootstrap import (  # noqa: E402,F401
     get_log_service,
     get_manual_job_service,
     get_nfo_service,
-    get_parser_service,
     get_p115_service,
+    get_parser_service,
     get_rename_service,
+    get_scheduler_service,
     get_scrape_job_service,
     get_scraped_file_service,
     get_scraper_service,
-    get_scheduler_service,
     get_subtitle_service,
     get_template_service,
     get_tmdb_service,
     get_watcher_service,
     get_websocket_manager,
 )
+from server.common.http import get_client_ip  # noqa: F401  统一依赖入口
 
 
 class TokenVerifier(Protocol):

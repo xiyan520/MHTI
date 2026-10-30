@@ -8,14 +8,14 @@
 - ``_execute_scrape_job`` 的超时分支：真实跑一遍处理器，断言落库字段与日志现场
 """
 
+import asyncio
+from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import aiosqlite
-import asyncio
 import pytest
 import pytest_asyncio
-from datetime import datetime
-from types import SimpleNamespace
 
 from server.application.history_service import HistoryService
 from server.application.scrape_job_service import (

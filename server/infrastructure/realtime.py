@@ -75,15 +75,6 @@ class ConnectionManager:
         for client_id in list(self.active_connections.keys()):
             await self.send_to_client(client_id, message)
 
-    def create_action_future(self, job_id: str) -> asyncio.Future:
-        """创建等待用户响应的 Future"""
-        if job_id in self.pending_actions:
-            # 取消旧的 Future
-            self.pending_actions[job_id].cancel()
-        future = asyncio.get_event_loop().create_future()
-        self.pending_actions[job_id] = future
-        return future
-
     def resolve_action(self, job_id: str, result: Any) -> bool:
         """解析用户响应"""
         if job_id not in self.pending_actions:

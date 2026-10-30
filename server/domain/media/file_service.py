@@ -1,7 +1,6 @@
 """File scanning service for video file discovery."""
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +35,7 @@ SUPPORTED_VIDEO_EXTENSIONS: set[str] = {
 # 禁止访问的系统目录（安全防护）
 BLOCKED_PATHS = {
     "/etc", "/var", "/usr", "/bin", "/sbin", "/boot", "/root", "/proc", "/sys",
-    "C:\Windows", "C:\Program Files", "C:\Program Files (x86)",
+    r"C:\Windows", r"C:\Program Files", r"C:\Program Files (x86)",
 }
 VIRTUAL_115_ROOT_NAME = "115网盘"
 VIRTUAL_115_ROOT_PATH = f"/{VIRTUAL_115_ROOT_NAME}"

@@ -1,13 +1,13 @@
 """Unit tests for Images API endpoints."""
 
-import pytest
 import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
 from server.main import app
-from server.models.image import ImageDownloadResult, BatchDownloadResponse
+from server.models.image import BatchDownloadResponse, ImageDownloadResult
 
 
 @pytest.fixture

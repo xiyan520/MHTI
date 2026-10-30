@@ -1,16 +1,20 @@
 """Configuration API routes."""
 
-from pydantic import BaseModel
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
-from server.application.watching import WatcherConfigUseCase
-from server.api.deps import require_auth
 from server.api.deps import (
     get_config_service,
     get_p115_service,
     get_tmdb_service,
     get_watcher_service,
+    require_auth,
 )
+from server.application.watcher_service import WatcherService
+from server.application.watching import WatcherConfigUseCase
+from server.domain.integration.p115_service import P115Service
+from server.domain.metadata.tmdb_service import TMDBService
+from server.domain.system.config_service import ConfigService
 from server.models.cloud_115 import (
     Cloud115AccountInfo,
     Cloud115QrSession,
@@ -18,6 +22,7 @@ from server.models.cloud_115 import (
     Cloud115Status,
 )
 from server.models.config import (
+    SUPPORTED_LANGUAGES,
     ApiTokenSaveRequest,
     ApiTokenSaveResponse,
     ApiTokenStatus,
@@ -28,23 +33,17 @@ from server.models.config import (
     ProxyConfigRequest,
     ProxyConfigResponse,
     ProxyTestResponse,
-    ProxyType,
-    SUPPORTED_LANGUAGES,
 )
-from server.models.organize import OrganizeConfig
 from server.models.download import DownloadConfig
+from server.models.nfo import NfoConfig
+from server.models.organize import OrganizeConfig
+from server.models.system import SystemConfig
 from server.models.template import NamingTemplate
 from server.models.watcher import (
     WatcherConfig,
     WatcherConfigRequest,
     WatcherConfigResponse,
 )
-from server.models.nfo import NfoConfig
-from server.models.system import SystemConfig
-from server.domain.system.config_service import ConfigService
-from server.domain.integration.p115_service import P115Service
-from server.domain.metadata.tmdb_service import TMDBService
-from server.application.watcher_service import WatcherService
 
 router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_auth)])
 

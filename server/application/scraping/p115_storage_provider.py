@@ -6,8 +6,8 @@
 from pathlib import Path
 from typing import Any
 
-from server.models.storage import StorageLocator
 from server.domain.system.config_service import ConfigService
+from server.models.storage import StorageLocator
 
 
 class P115StorageProvider:

@@ -6,14 +6,14 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
+import server.application.manual_job_service as manual_job_service_module
+import server.application.scrape_job_service as scrape_job_service_module
+from server.application.manual_job_service import ManualJobService
+from server.application.scrape_job_service import ScrapeJobService
 from server.infrastructure.db import create_all_tables
 from server.models.manual_job import JobSource, LinkMode, ManualJobCreate
 from server.models.scrape_job import ScrapeJobCreate, ScrapeJobSource
 from server.models.storage import StorageLocator, StorageProvider
-from server.application.manual_job_service import ManualJobService
-from server.application.scrape_job_service import ScrapeJobService
-import server.application.manual_job_service as manual_job_service_module
-import server.application.scrape_job_service as scrape_job_service_module
 
 
 async def _initialize_test_db(db_path: Path) -> None:
@@ -261,8 +261,8 @@ async def test_execute_job_builds_file_locator_for_p115_source(
     )
 
     # Fake the FileService.scan_folder_async path used for 115 sources.
-    from server.models.file import ScannedFile
     from server.domain.media import file_service as file_service_module
+    from server.models.file import ScannedFile
 
     scanned = [
         ScannedFile(

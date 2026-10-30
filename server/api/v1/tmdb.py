@@ -6,15 +6,14 @@ TMDBConnectionError、TMDBNotFoundError）由全局异常处理器统一处理�
 
 from fastapi import APIRouter, Depends, Query
 
-from server.api.deps import require_auth
-from server.api.deps import get_tmdb_service
+from server.api.deps import get_tmdb_service, require_auth
+from server.domain.metadata.tmdb_service import TMDBService
 from server.models.tmdb import (
+    TMDBError,
     TMDBSearchResponse,
     TMDBSeason,
     TMDBSeries,
-    TMDBError,
 )
-from server.domain.metadata.tmdb_service import TMDBService
 
 router = APIRouter(prefix="/api/tmdb", tags=["tmdb"], dependencies=[Depends(require_auth)])
 

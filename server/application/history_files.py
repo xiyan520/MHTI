@@ -23,8 +23,8 @@ from pathlib import Path
 
 from server.application.history_service import HistoryService, split_record_folder_path
 from server.application.manual_job_service import ManualJobService
-from server.application.scraped_file_service import ScrapedFileService
 from server.application.scrape_job_service import ScrapeJobService
+from server.application.scraped_file_service import ScrapedFileService
 from server.domain.system.config_service import ConfigService
 from server.models.history import (
     HistoryFileDeleteResponse,

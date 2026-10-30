@@ -1,6 +1,7 @@
 """Data models for naming templates."""
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -29,7 +30,7 @@ class TemplatePreviewRequest(BaseModel):
     """Request for template preview."""
 
     template: str
-    sample_data: dict | None = None
+    sample_data: dict[str, Any] | None = None
 
 
 class TemplatePreviewResponse(BaseModel):

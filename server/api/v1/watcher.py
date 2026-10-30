@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from server.api.deps import require_auth
-from server.api.deps import get_watcher_service
+from server.api.deps import get_watcher_service, require_auth
+from server.application.watcher_service import WatcherService
 from server.models.watcher import (
     WatchedFolder,
     WatchedFolderCreate,
@@ -11,7 +11,6 @@ from server.models.watcher import (
     WatchedFolderUpdate,
     WatcherStatusResponse,
 )
-from server.application.watcher_service import WatcherService
 
 router = APIRouter(prefix="/api/watcher", tags=["watcher"], dependencies=[Depends(require_auth)])
 

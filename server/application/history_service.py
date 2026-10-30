@@ -11,6 +11,7 @@ from pathlib import Path
 
 from server.application.undo_store import UndoSnapshot, UndoStore
 from server.infrastructure.db import DATABASE_PATH
+from server.infrastructure.realtime import get_notifier
 from server.infrastructure.repositories.history_repository import HistoryRepository
 from server.infrastructure.repositories.scraped_file_repository import ScrapedFileRepository
 from server.models.history import (
@@ -23,7 +24,6 @@ from server.models.history import (
     TaskStatus,
     UndoResponse,
 )
-from server.infrastructure.realtime import get_notifier
 
 # 内存日志缓存：record_id -> list[ScrapeLogStep]
 _log_cache: dict[str, list[ScrapeLogStep]] = {}

@@ -1,6 +1,7 @@
 """Frontend runtime configuration endpoint."""
 
 import os
+
 from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/config", tags=["frontend-config"])

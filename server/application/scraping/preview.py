@@ -2,9 +2,9 @@
 
 from pathlib import Path
 
-from server.models.scraper import ScrapePreview
-from server.domain.parsing.parser_service import ParserService
 from server.domain.metadata.tmdb_service import TMDBService
+from server.domain.parsing.parser_service import ParserService
+from server.models.scraper import ScrapePreview
 
 
 class ScrapePreviewService:

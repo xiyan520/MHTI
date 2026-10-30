@@ -3,10 +3,10 @@
 从 api/config.py 下沉，路由只做协议转换。
 """
 
-from server.models.watcher import WatchedFolderCreate, WatcherConfig
-from server.domain.system.config_service import ConfigService
-from server.domain.integration.p115_service import P115Service
 from server.application.watcher_service import WatcherService
+from server.domain.integration.p115_service import P115Service
+from server.domain.system.config_service import ConfigService
+from server.models.watcher import WatchedFolderCreate, WatcherConfig
 
 
 class WatcherConfigUseCase:

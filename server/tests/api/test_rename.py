@@ -1,14 +1,15 @@
 """Unit tests for Rename API endpoints."""
 
-import pytest
 import tempfile
 from pathlib import Path
+
+import pytest
 from fastapi.testclient import TestClient
 
-from server.main import app
 from server.bootstrap import get_rename_service
 from server.domain.artifacts.rename_service import RenameService
 from server.domain.system.template_service import TemplateService
+from server.main import app
 
 
 @pytest.fixture

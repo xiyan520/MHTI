@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_rename_service, require_auth
+from server.domain.artifacts.rename_service import RenameService
 from server.models.rename import (
     BatchRenameRequest,
     BatchRenameResponse,
@@ -10,7 +11,6 @@ from server.models.rename import (
     RenameRequest,
     RenameResult,
 )
-from server.domain.artifacts.rename_service import RenameService
 
 router = APIRouter(prefix="/api/rename", tags=["rename"], dependencies=[Depends(require_auth)])
 

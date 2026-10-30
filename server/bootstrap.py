@@ -26,11 +26,11 @@ async def init_services() -> None:
     container = await get_container_async()
 
     # Import services here to avoid circular imports
-    from server.domain.system.config_service import ConfigService
-    from server.domain.parsing.parser_service import ParserService
     from server.domain.artifacts.nfo_service import NFOService
     from server.domain.artifacts.rename_service import RenameService
     from server.domain.artifacts.subtitle_service import SubtitleService
+    from server.domain.parsing.parser_service import ParserService
+    from server.domain.system.config_service import ConfigService
     from server.domain.system.template_service import TemplateService
     from server.infrastructure.realtime import ConnectionManager
 

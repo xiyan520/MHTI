@@ -1,10 +1,11 @@
 """Unit tests for SubtitleService."""
 
-import pytest
 import tempfile
 from pathlib import Path
 
-from server.domain.artifacts.subtitle_service import SubtitleService, SUBTITLE_EXTENSIONS
+import pytest
+
+from server.domain.artifacts.subtitle_service import SUBTITLE_EXTENSIONS, SubtitleService
 from server.models.subtitle import SubtitleLanguage
 
 

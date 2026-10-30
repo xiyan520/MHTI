@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 from server.models.manual_job import ManualJobAdvancedSettings
 
 if TYPE_CHECKING:
-    from server.domain.system.config_service import ConfigService
     from server.domain.metadata.tmdb_service import TMDBService
+    from server.domain.system.config_service import ConfigService
 
 
 class ScraperConfigResolver:
@@ -98,8 +98,8 @@ class ScraperConfigResolver:
             TMDBInvalidCredentialsError: Cookie 或 API Token 已失效。
         """
         from server.common.exceptions import (
-            TMDBNotConfiguredError,
             TMDBInvalidCredentialsError,
+            TMDBNotConfiguredError,
         )
 
         # Check Cookie
@@ -124,8 +124,8 @@ class ScraperConfigResolver:
             TMDBInvalidCredentialsError: API Token 已失效。
         """
         from server.common.exceptions import (
-            TMDBNotConfiguredError,
             TMDBInvalidCredentialsError,
+            TMDBNotConfiguredError,
         )
 
         token_status = await self.tmdb_service.get_api_token_status()

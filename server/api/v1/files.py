@@ -6,14 +6,13 @@ PermissionDeniedError）由全局异常处理器统一处理，无需在 API 层
 
 from fastapi import APIRouter, Depends, Query
 
+from server.api.deps import get_file_service, get_history_service, get_p115_service, require_auth
+from server.application.history_service import HistoryService
 from server.application.library import FolderScanUseCase
-from server.api.deps import require_auth
-from server.api.deps import get_file_service, get_history_service, get_p115_service
-from server.models.file import BrowseResponse, ScanRequest, ScanResponse
-from server.models.storage import StorageProvider
 from server.domain.integration.p115_service import P115Service
 from server.domain.media.file_service import FileService
-from server.application.history_service import HistoryService
+from server.models.file import BrowseResponse, ScanRequest, ScanResponse
+from server.models.storage import StorageProvider
 
 router = APIRouter(prefix="/api", tags=["files"], dependencies=[Depends(require_auth)])
 

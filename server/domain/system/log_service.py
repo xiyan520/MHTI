@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 from server.infrastructure.repositories.log_repository import LogRepository

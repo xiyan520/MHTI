@@ -3,13 +3,13 @@
 from fastapi import APIRouter, Depends
 
 from server.api.deps import get_parser_service, require_auth
+from server.domain.parsing.parser_service import ParserService
 from server.models.parser import (
     BatchParseRequest,
     BatchParseResponse,
     ParseRequest,
     ParseResponse,
 )
-from server.domain.parsing.parser_service import ParserService
 
 router = APIRouter(prefix="/api", tags=["parser"], dependencies=[Depends(require_auth)])
 

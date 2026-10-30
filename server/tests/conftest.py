@@ -10,14 +10,12 @@
 import tempfile
 from pathlib import Path
 from typing import Generator
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from server.api.deps import AuthContext, require_auth
 from server.main import app
-
 
 # =============================================================================
 # Authentication Fixtures

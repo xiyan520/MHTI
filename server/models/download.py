@@ -1,6 +1,7 @@
 """Download configuration data models."""
 
 from enum import Enum
+
 from pydantic import BaseModel
 
 
