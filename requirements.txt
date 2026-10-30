@@ -9,3 +9,6 @@ sse-starlette>=2.0,<3.0
 watchdog>=4.0,<5.0
 python-jose[cryptography]>=3.3,<4.0
 p115client==0.0.9.6.5.1
+# p115client 0.0.9.6.5.1 的 tool 子包仍 import concurrenttools.threadpool_map，
+# 该符号在 0.1.9 被移除；0.1.8 同时满足 p115client 的 >=0.1.8 且符号还在
+python-concurrenttools==0.1.8

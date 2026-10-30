@@ -17,14 +17,17 @@ croniter = "^2.0.0"
 sse-starlette = "^2.0.0"
 watchdog = "^4.0.0"
 python-jose = {extras = ["cryptography"], version = "^3.3.0"}
-p115client = "0.0.8.6.6"
+# 与 requirements.txt 保持一致（Docker/CI 以 requirements.txt 为安装真源）
+p115client = "0.0.9.6.5.1"
+python-concurrenttools = "0.1.8"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.0.0"
-pytest-cov = "^4.1.0"
-pytest-asyncio = "^0.23.0"
-ruff = "^0.2.0"
-mypy = "^1.8.0"
+# 与 requirements-dev.txt 保持一致（后者是 CI/本地安装真源）
+pytest = ">=8,<10"
+pytest-cov = ">=4.1,<8.0"
+pytest-asyncio = ">=1.0,<2.0"
+ruff = ">=0.2,<1.0"
+mypy = ">=1.8,<2.0"
 
 [build-system]
 requires = ["poetry-core"]
@@ -39,12 +42,24 @@ addopts = "-v --tb=short"
 
 [tool.ruff]
 line-length = 100
+target-version = "py311"
+
+# ruff >= 0.2 只认 [tool.ruff.lint]；写在 [tool.ruff] 下的 select 会被忽略
+[tool.ruff.lint]
 select = ["E", "F", "W", "I"]
+# 中文注释按字符计宽会大面积误报；换行交给 ruff format，这里不卡行宽
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# 先配置日志与 CORS 常量，再导入 router：这段导入顺序本身有意义
+"server/main.py" = ["E402"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 strict = true
 ignore_missing_imports = true
-
-[tool.black]
-line-length = 100
+# 全量 strict 需要分批推进：CI 先只卡这两个目录，其余逐步加
+files = [
+    "server/models",
+    "server/common",
+]

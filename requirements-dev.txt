@@ -1,0 +1,12 @@
+# 开发与 CI 依赖：pip install -r requirements-dev.txt
+#
+# 与 pyproject.toml 的 dev 组保持一致。CI 与 Docker 都以 requirements*.txt 为安装真源，
+# 过去 CI 只装 requirements.txt，pytest 根本不在环境里，配合 "|| echo 测试完成"
+# 让测试长期处于「从不执行但显示通过」的状态。
+-r requirements.txt
+
+pytest>=8,<10
+pytest-asyncio>=1.0,<2.0
+pytest-cov>=4.1,<8.0
+ruff>=0.2,<1.0
+mypy>=1.8,<2.0
