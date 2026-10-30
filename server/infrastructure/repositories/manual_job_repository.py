@@ -32,6 +32,7 @@ _MANUAL_JOBS_DDL = """
         skip_count INTEGER DEFAULT 0,
         error_count INTEGER DEFAULT 0,
         total_count INTEGER DEFAULT 0,
+        dispatched_count INTEGER,
         error_message TEXT
     )
 """
@@ -74,7 +75,37 @@ class ManualJobRepository(BaseRepository):
                 await db.execute("ALTER TABLE manual_jobs ADD COLUMN allow_local_output INTEGER DEFAULT 0")
             except Exception:
                 pass  # 列已存在
+            try:
+                await db.execute("ALTER TABLE manual_jobs ADD COLUMN dispatched_count INTEGER")
+            except Exception:
+                pass  # 列已存在
             await db.commit()
+
+            # 一次性修复：旧口径下「重试 +1」会把成功数累加到超过总数
+            # （实测 13/9 = 144%）。终态任务的计数一律以子记录为准，
+            # 仅在发现越界时才回写，避免每次启动都重算全表。
+            try:
+                await db.execute(
+                    """
+                    UPDATE manual_jobs
+                       SET success_count = (
+                               SELECT COUNT(*) FROM history_records h
+                                WHERE h.manual_job_id = manual_jobs.id
+                                  AND h.status = 'success'
+                           ),
+                           error_count = (
+                               SELECT COUNT(*) FROM history_records h
+                                WHERE h.manual_job_id = manual_jobs.id
+                                  AND h.status IN ('failed', 'timeout', 'cancelled')
+                           )
+                     WHERE total_count > 0
+                       AND success_count + skip_count + error_count > total_count
+                    """
+                )
+                await db.commit()
+            except Exception:
+                pass  # history_records 尚未建表时跳过，
+                      # 下次启动还会再试
 
     async def insert_job(
         self,
@@ -163,6 +194,24 @@ class ManualJobRepository(BaseRepository):
             "SELECT * FROM manual_jobs WHERE id = ?", (job_id,)
         )
 
+    async def count_records_by_status(self, job_id: int) -> dict[str, int]:
+        """按状态统计该任务的子记录数（进度重算的数据来源）。
+
+        每个被投递的文件都会在执行开始时建一条 history_records，
+        因此记录状态就是这批文件的真实处理结果。
+        """
+        if job_id is None:
+            return {}
+        try:
+            rows = await self._fetch_all(
+                "SELECT status, COUNT(*) AS count FROM history_records "
+                "WHERE manual_job_id = ? GROUP BY status",
+                (job_id,),
+            )
+        except Exception:
+            return {}
+        return {str(row["status"]): int(row["count"]) for row in rows}
+
     async def list_ids_by_status(self, status: ManualJobStatus) -> list[int]:
         """按状态列出任务 id（启动恢复重放入口）。"""
         rows = await self._fetch_all(
@@ -200,6 +249,7 @@ class ManualJobRepository(BaseRepository):
         skip_count: int | None = None,
         error_count: int | None = None,
         total_count: int | None = None,
+        dispatched_count: int | None = None,
         error_message: str | None = None,
     ) -> None:
         updates = ["status = ?"]
@@ -223,6 +273,9 @@ class ManualJobRepository(BaseRepository):
         if total_count is not None:
             updates.append("total_count = ?")
             params.append(total_count)
+        if dispatched_count is not None:
+            updates.append("dispatched_count = ?")
+            params.append(dispatched_count)
         if error_message is not None:
             updates.append("error_message = ?")
             params.append(error_message)

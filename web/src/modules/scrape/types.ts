@@ -30,6 +30,8 @@ export interface ManualJob {
   skip_count: number
   error_count: number
   total_count: number
+  /** 投递阶段写入；为 null 表示扫描/投递尚未结束 */
+  dispatched_count: number | null
   error_message: string | null
 }
 

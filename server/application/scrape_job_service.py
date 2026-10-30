@@ -431,6 +431,23 @@ def _ensure_worker() -> bool:
     return True
 
 
+async def _refresh_manual_job_progress(service: ScrapeJobService, job_id: str) -> None:
+    """子任务落地后回写所属手动任务的进度。
+
+    手动任务的生命周期跨到子任务结束，父任务没有协程在等结果，因此进度由
+    worker 在每个子任务执行完后统一刷新，而不是散落在各终态分支里。
+    """
+    try:
+        job = await service.get_job(job_id)
+        if job is None or job.source != ScrapeJobSource.MANUAL or not job.source_id:
+            return
+        from server.application.manual_job_service import ManualJobService
+
+        await ManualJobService().refresh_progress(job.source_id)
+    except Exception as exc:  # noqa: BLE001 - 进度回写失败不该影响刮削结果
+        logger.warning(f"刷新手动任务进度失败 {job_id}: {exc}")
+
+
 async def _scrape_worker() -> None:
     """后台 worker 处理刮削队列"""
     global _semaphore
@@ -439,6 +456,10 @@ async def _scrape_worker() -> None:
     while True:
         try:
             job_id = await _scrape_queue.get()
+        except asyncio.CancelledError:
+            break
+
+        try:
             # 使用 Semaphore 控制并发
             if _semaphore:
                 async with _semaphore:
@@ -449,6 +470,8 @@ async def _scrape_worker() -> None:
             break
         except Exception as e:
             logger.error(f"Scrape worker error: {e}")
+
+        await _refresh_manual_job_progress(service, job_id)
 
 
 async def _execute_scrape_job(service: ScrapeJobService, job_id: str) -> None:

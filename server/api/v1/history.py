@@ -331,6 +331,9 @@ async def resolve_conflict(
             await history_service.update_record(
                 record_id, status=TaskStatus.SKIPPED, error_message="用户跳过"
             )
+            # 跳过同样是终态，所属手动任务可能因此收尾
+            if record.manual_job_id:
+                await ManualJobService().refresh_progress(record.manual_job_id)
             return {"success": True, "message": "已跳过"}
 
         tmdb_id = record.conflict_data.get("tmdb_id") if record.conflict_data else None
@@ -379,6 +382,9 @@ async def resolve_conflict(
             await history_service.update_record(
                 record_id, status=TaskStatus.SKIPPED, error_message="用户跳过（Emby 已存在）"
             )
+            # 跳过同样是终态，所属手动任务可能因此收尾
+            if record.manual_job_id:
+                await ManualJobService().refresh_progress(record.manual_job_id)
             return {"success": True, "message": "已跳过"}
 
         tmdb_id = record.conflict_data.get("tmdb_id") if record.conflict_data else None

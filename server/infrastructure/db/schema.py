@@ -141,6 +141,7 @@ async def _create_job_tables(db: aiosqlite.Connection) -> None:
             skip_count INTEGER DEFAULT 0,
             error_count INTEGER DEFAULT 0,
             total_count INTEGER DEFAULT 0,
+            dispatched_count INTEGER,
             error_message TEXT
         )
     """)

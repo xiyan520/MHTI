@@ -516,19 +516,12 @@ class HistoryScrapeActions:
             except Exception as exc:  # noqa: BLE001 - 登记是附带动作，不能拖垮刮削结果
                 logger.warning(f"登记刮削产物失败 {record_id}: {exc}")
 
-            # 更新手动任务统计（skip_count - 1, success_count + 1）
+            # 手动任务统计以子记录为准：重试成功后按记录重算，
+            # 而不是在这条路径上做 ±1 累加（旧写法会把成功数顶过总数）
             if manual_job_id:
                 from server.application.manual_job_service import ManualJobService
 
-                job_service = ManualJobService()
-                job = await job_service.get_job(manual_job_id)
-                if job:
-                    await job_service.update_job_status(
-                        manual_job_id,
-                        job.status,  # 保持原状态
-                        success_count=job.success_count + 1,
-                        skip_count=max(0, job.skip_count - 1),
-                    )
+                await ManualJobService().refresh_progress(manual_job_id)
 
             return {"success": True, "message": "处理成功", "dest_path": result.dest_path}
 

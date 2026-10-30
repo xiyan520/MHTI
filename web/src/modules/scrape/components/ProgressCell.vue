@@ -16,11 +16,16 @@ const props = defineProps<{
   showLabel?: boolean
 }>()
 
-// 进度百分比
+// 已处理 = 成功 + 跳过 + 错误
+const completedCount = computed(
+  () => props.successCount + props.skipCount + props.errorCount
+)
+
+// 进度百分比：夹在 0-100 之间，脏数据也不会画出越界的进度条
 const progressPercentage = computed(() => {
   if (props.totalCount === 0) return 0
-  const completed = props.successCount + props.skipCount + props.errorCount
-  return Math.round((completed / props.totalCount) * 100)
+  const percent = Math.round((completedCount.value / props.totalCount) * 100)
+  return Math.min(100, Math.max(0, percent))
 })
 
 // 成功率
@@ -79,6 +84,10 @@ const stats = computed(() => [
         <div class="tooltip-row">
           <span>完成进度</span>
           <span class="tooltip-value">{{ progressPercentage }}%</span>
+        </div>
+        <div class="tooltip-row">
+          <span>已处理</span>
+          <span class="tooltip-value">{{ completedCount }} / {{ totalCount }}</span>
         </div>
         <div class="tooltip-row">
           <span>成功率</span>

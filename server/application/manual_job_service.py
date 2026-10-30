@@ -172,6 +172,7 @@ class ManualJobService:
         skip_count: int | None = None,
         error_count: int | None = None,
         total_count: int | None = None,
+        dispatched_count: int | None = None,
         error_message: str | None = None,
     ) -> None:
         """Update job status and counts."""
@@ -186,8 +187,70 @@ class ManualJobService:
             skip_count=skip_count,
             error_count=error_count,
             total_count=total_count,
+            dispatched_count=dispatched_count,
             error_message=error_message,
         )
+
+    async def refresh_progress(self, job_id: int) -> None:
+        """按子记录重算进度，并在整批处理完毕时收尾。
+
+        手动任务的生命周期覆盖整批文件：投递完成只是中途状态，等每个子任务都
+        落到终态、且成功/失败/跳过之和达到扫描总数时才结束。计数一律由
+        history_records 重算，重试成功不会像旧的 ±1 累加那样把成功数顶过总数。
+
+        Args:
+            job_id: 手动任务 ID；不存在或不在运行中时直接返回。
+        """
+        await self._ensure_db()
+
+        job = await self.get_job(job_id)
+        if job is None or job.status != ManualJobStatus.RUNNING:
+            return
+
+        counts = await self._repo.count_records_by_status(job_id)
+        success = counts.get("success", 0)
+        error = sum(counts.get(status, 0) for status in ("failed", "timeout", "cancelled"))
+        user_skipped = counts.get("skipped", 0)
+        unresolved = sum(counts.get(status, 0) for status in ("running", "pending_action"))
+
+        # 投递未结束时还无法确定有哪些文件被跳过，沿用投递阶段写入的值；
+        # 投递结束后「总数 - 已派发」就是真实的跳过数。
+        if job.dispatched_count is None:
+            dispatch_skipped = job.skip_count
+        else:
+            dispatch_skipped = max(0, job.total_count - job.dispatched_count)
+        skip = dispatch_skipped + user_skipped
+
+        counters = {
+            "success_count": success,
+            "skip_count": skip,
+            "error_count": error,
+        }
+        settled = (
+            job.dispatched_count is not None
+            and unresolved == 0
+            and success + error + skip >= job.total_count
+        )
+        if not settled:
+            await self.update_job_status(job_id, ManualJobStatus.RUNNING, **counters)
+            return
+
+        # 全部失败与「有成功/跳过」区分开，列表能直接筛出失败批次
+        if success + skip == 0:
+            await self.update_job_status(
+                job_id,
+                ManualJobStatus.FAILED,
+                finished_at=datetime.now(),
+                error_message="全部文件处理失败",
+                **counters,
+            )
+        else:
+            await self.update_job_status(
+                job_id,
+                ManualJobStatus.SUCCESS,
+                finished_at=datetime.now(),
+                **counters,
+            )
 
     async def recover_pending_jobs(self, *, start_workers: bool = True) -> dict[str, int]:
         """启动恢复：收尾 running 孤儿，并把 pending 重新入队。
@@ -205,6 +268,13 @@ class ManualJobService:
         interrupted = "进程重启中断，请重新执行"
 
         for job_id in await self._repo.list_ids_by_status(ManualJobStatus.RUNNING):
+            running_job = await self.get_job(job_id)
+            # 已投递完毕的任务不在本进程里等结果：子任务恢复后照常执行，
+            # 由它们落地时回写进度，重启不该把它判死。
+            if running_job is not None and running_job.dispatched_count is not None:
+                await self.refresh_progress(job_id)
+                continue
+            # 扫描/投递阶段中断：文件没有全部排进队列，任务无法自愈
             await self.update_job_status(
                 job_id,
                 ManualJobStatus.FAILED,
@@ -276,6 +346,11 @@ class ManualJobService:
             skip_count=row["skip_count"],
             error_count=row["error_count"],
             total_count=row["total_count"],
+            dispatched_count=(
+                row["dispatched_count"]
+                if "dispatched_count" in row.keys() and row["dispatched_count"] is not None
+                else None
+            ),
             error_message=row["error_message"],
         )
 
@@ -402,14 +477,17 @@ async def _execute_job(service: ManualJobService, job_id: int) -> None:
                 skipped_count += 1
                 logger.info(f"手动任务 #{job_id} 跳过（已有处理中任务）: {file_path}")
 
-        # 完成 - 手动任务只负责扫描和投递，不等待刮削完成
+        # 投递结束只是中途状态：任务要等这批文件的子任务全部落地才算完成。
+        # 这里先记下派发结果作为进度基准，再由 refresh_progress 结算。
         await service.update_job_status(
             job_id,
-            ManualJobStatus.SUCCESS,
-            finished_at=datetime.now(),
-            success_count=dispatched_count,  # 实际投递成功的数量
+            ManualJobStatus.RUNNING,
+            success_count=0,
             skip_count=skipped_count,
+            error_count=0,
+            dispatched_count=dispatched_count,
         )
+        await service.refresh_progress(job_id)
         logger.info(
             f"Manual job {job_id} completed: {dispatched_count} dispatched, {skipped_count} skipped"
         )
