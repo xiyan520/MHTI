@@ -1,10 +1,13 @@
 """Rename service for organizing video files."""
 
+import errno
 import logging
 import os
 import shutil
+import uuid
 from pathlib import Path
 
+from server.domain.system.template_service import TemplateService
 from server.models.organize import OrganizeMode
 from server.models.rename import (
     BatchRenameRequest,
@@ -13,7 +16,6 @@ from server.models.rename import (
     RenameRequest,
     RenameResult,
 )
-from server.domain.system.template_service import TemplateService
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +125,7 @@ class RenameService:
         try:
             # Create destination directory
             dest_folder.mkdir(parents=True, exist_ok=True)
-            logger.info(f"execute_rename: 目录已创建/存在")
+            logger.info("execute_rename: 目录已创建/存在")
 
             # Create backup if requested
             backup_path = None
@@ -144,7 +146,7 @@ class RenameService:
             # Move/rename the file based on link_mode
             logger.info(f"execute_rename: 正在处理文件，模式: {request.link_mode or 'move(默认)'}...")
             self._execute_file_operation(source_path, dest_path, request.link_mode)
-            logger.info(f"execute_rename: 文件处理成功!")
+            logger.info("execute_rename: 文件处理成功!")
 
             return RenameResult(
                 source_path=str(source_path),
@@ -264,18 +266,55 @@ class RenameService:
         """
         mode = link_mode or OrganizeMode.MOVE  # 默认移动
 
-        if mode == OrganizeMode.COPY:
-            shutil.copy2(str(source_path), str(dest_path))
-            logger.info(f"文件已复制: {source_path} -> {dest_path}")
-        elif mode == OrganizeMode.HARDLINK:
+        if mode == OrganizeMode.HARDLINK:
             os.link(str(source_path), str(dest_path))
             logger.info(f"硬链接已创建: {source_path} -> {dest_path}")
-        elif mode == OrganizeMode.SYMLINK:
+            return
+        if mode == OrganizeMode.SYMLINK:
             os.symlink(str(source_path), str(dest_path))
             logger.info(f"软链接已创建: {source_path} -> {dest_path}")
-        else:  # MOVE
-            shutil.move(str(source_path), str(dest_path))
-            logger.info(f"文件已移动: {source_path} -> {dest_path}")
+            return
+
+        # 复制/移动都先落到同目录临时文件再 os.replace 原子替换：
+        # 中途失败（含被超时取消）不会在目标位留下半截视频，重试时也不会把
+        # 「半个文件」当成已存在的成品。临时名不带视频扩展名，扫描侧不会误收。
+        tmp_path = dest_path.with_name(f"{dest_path.name}.mhti-tmp-{uuid.uuid4().hex[:8]}")
+
+        if mode == OrganizeMode.MOVE:
+            try:
+                # 同盘 rename 是原子操作，也省掉一次完整复制
+                os.replace(str(source_path), str(dest_path))
+                logger.info(f"文件已移动: {source_path} -> {dest_path}")
+                return
+            except OSError as e:
+                if e.errno != errno.EXDEV:
+                    raise
+                # 跨盘：退化为「复制到临时文件 → 原子替换」，再删源
+
+        try:
+            shutil.copy2(str(source_path), str(tmp_path))
+            os.replace(str(tmp_path), str(dest_path))
+        except BaseException:
+            # CancelledError 是 BaseException：超时取消同样要清掉半成品
+            try:
+                if tmp_path.exists():
+                    tmp_path.unlink()
+            except OSError as cleanup_error:
+                logger.warning(f"清理临时文件失败: {tmp_path}: {cleanup_error}")
+            raise
+
+        if mode == OrganizeMode.COPY:
+            logger.info(f"文件已复制: {source_path} -> {dest_path}")
+            return
+
+        # MOVE 的跨盘分支：目标已完整落地，才允许删源
+        try:
+            source_path.unlink()
+        except OSError as e:
+            # 宁可留一份重复文件，也不能让用户以为源被搬走却其实还在
+            logger.error(f"跨盘移动已复制但删除源失败: {source_path}: {e}")
+            raise
+        logger.info(f"文件已移动(跨盘): {source_path} -> {dest_path}")
 
     def create_series_structure(
         self,

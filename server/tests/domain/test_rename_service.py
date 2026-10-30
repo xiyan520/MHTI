@@ -1,19 +1,20 @@
 """Unit tests for RenameService."""
 
-import pytest
 import tempfile
 from datetime import date
 from pathlib import Path
 from unittest.mock import AsyncMock
 
-from server.models.template import NamingTemplate
-from server.domain.system.config_service import ConfigService
+import pytest
+
 from server.domain.artifacts.rename_service import RenameService
+from server.domain.system.config_service import ConfigService
 from server.domain.system.template_service import TemplateService
 from server.models.organize import OrganizeMode
-from server.models.rename import RenameRequest, BatchRenameRequest
+from server.models.rename import BatchRenameRequest, RenameRequest
 from server.models.scraper import ScrapeByIdRequest, ScrapeStatus
 from server.models.storage import StorageLocator, StorageProvider
+from server.models.template import NamingTemplate
 from server.models.tmdb import TMDBEpisode, TMDBSeason, TMDBSeries
 
 
@@ -622,3 +623,70 @@ class Test115OutputBranches:
         assert result.dest_path is not None
         assert Path(result.dest_path).parent == expected_folder
         assert Path(result.dest_path).exists()
+
+
+# ============================================================================
+# 原子落盘：失败/取消不留半成品
+# ============================================================================
+
+
+class TestAtomicFileOperations:
+    """复制/移动必须「全成或全无」。
+
+    断点重试的前提是：目标目录里要么是完整文件，要么什么都没有；留下半截 mkv
+    会被下一次执行当成「已存在」直接判冲突。
+    """
+
+    def test_copy_failure_leaves_no_partial_file(self, rename_service, tmp_path, monkeypatch):
+        src = tmp_path / "src.mkv"
+        src.write_bytes(b"payload")
+        dst = tmp_path / "dst.mkv"
+
+        def boom(*args, **kwargs):
+            raise OSError(28, "No space left on device")
+
+        monkeypatch.setattr("server.domain.artifacts.rename_service.shutil.copy2", boom)
+
+        with pytest.raises(OSError):
+            rename_service._execute_file_operation(src, dst, OrganizeMode.COPY)
+
+        assert not dst.exists()
+        assert list(tmp_path.glob("*.mhti-tmp-*")) == []
+
+    def test_copy_success_produces_complete_file(self, rename_service, tmp_path):
+        src = tmp_path / "src.mkv"
+        src.write_bytes(b"payload")
+        dst = tmp_path / "dst.mkv"
+
+        rename_service._execute_file_operation(src, dst, OrganizeMode.COPY)
+
+        assert dst.read_bytes() == b"payload"
+        # 复制模式源文件保留
+        assert src.exists()
+        assert list(tmp_path.glob("*.mhti-tmp-*")) == []
+
+    def test_move_across_devices_falls_back_to_copy_then_unlink(
+        self, rename_service, tmp_path, monkeypatch
+    ):
+        import errno as errno_module
+
+        import server.domain.artifacts.rename_service as rename_module
+
+        src = tmp_path / "src.mkv"
+        src.write_bytes(b"payload")
+        dst = tmp_path / "dst.mkv"
+        real_replace = rename_module.os.replace
+
+        def fake_replace(source, target):
+            # 模拟同盘 rename 不可用（跨盘 EXDEV），临时文件替换仍应正常
+            if Path(source) == src:
+                raise OSError(errno_module.EXDEV, "Invalid cross-device link")
+            return real_replace(source, target)
+
+        monkeypatch.setattr(rename_module.os, "replace", fake_replace)
+
+        rename_service._execute_file_operation(src, dst, OrganizeMode.MOVE)
+
+        assert dst.read_bytes() == b"payload"
+        assert not src.exists()
+        assert list(tmp_path.glob("*.mhti-tmp-*")) == []

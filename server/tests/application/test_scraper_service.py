@@ -26,9 +26,9 @@ from server.models.rename import RenameRequest
 from server.models.scraper import ScrapeByIdRequest, ScrapeRequest, ScrapeStatus
 from server.models.storage import StorageLocator, StorageProvider
 from server.models.tmdb import (
+    TMDBEpisode,
     TMDBSearchResponse,
     TMDBSearchResult,
-    TMDBEpisode,
     TMDBSeason,
     TMDBSeries,
 )
@@ -459,3 +459,28 @@ async def test_scrape_by_id_115_to_115_writes_local_metadata(temp_db: Path, tmp_
     nfo_files = sorted(p.name for p in season_folder.glob("*.nfo"))
     assert nfo_files == ["Test Show - S01E01 -.nfo", "season.nfo"]
     assert (series_folder / "tvshow.nfo").exists()
+
+
+@pytest.mark.asyncio
+async def test_scrape_file_stops_when_adult_access_disabled(temp_db: Path):
+    """Token 未开 R18 时搜索结果必然为空。
+
+    过去用户只会看到「未找到匹配的成人剧集」，无从判断是权限问题；现在应在
+    搜索前就停下来，并明确指向设置页。
+    """
+    tmp_path = Path(temp_db).parent
+    video = tmp_path / "剧名 第1話.mp4"
+    video.write_bytes(b"video")
+
+    tmdb = FakeTMDB(search_results=[TMDBSearchResult(id=123, name="Test Show", adult=True)])
+    service = _build_service(temp_db, tmdb, parser=ParserService())
+    service.config_service.get_adult_status = AsyncMock(return_value=(False, "未开启 R18", None))
+
+    result = await service.scrape_file(
+        ScrapeRequest(file_path=str(video), output_dir=str(tmp_path / "out"))
+    )
+
+    assert result.status == ScrapeStatus.API_FAILED
+    assert "R18" in (result.message or "")
+    tmdb.search_series_by_api.assert_not_awaited()
+    assert [step.name for step in result.scrape_logs][:2] == ["解析文件名", "检查 TMDB 权限"]

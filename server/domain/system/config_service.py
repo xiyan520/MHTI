@@ -1,21 +1,24 @@
 """Configuration storage service."""
 
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
 from server.infrastructure.db import DATABASE_PATH
-from server.infrastructure.security import decrypt, encrypt
 from server.infrastructure.repositories.config_repository import ConfigRepository
-from server.models.config import LanguageConfig, ProxyConfig, ProxyType, ApiTokenStatus
+from server.infrastructure.security import decrypt, encrypt
 from server.models.cloud_115 import Cloud115Config
-from server.models.emby import EmbyConfig
-from server.models.organize import OrganizeConfig, OrganizeMode
+from server.models.config import ApiTokenStatus, LanguageConfig, ProxyConfig, ProxyType
 from server.models.download import DownloadConfig
+from server.models.emby import EmbyConfig
+from server.models.nfo import NfoConfig
+from server.models.organize import OrganizeConfig, OrganizeMode
+from server.models.system import SystemConfig
 from server.models.template import NamingTemplate
 from server.models.watcher import WatcherConfig, WatcherMode
-from server.models.nfo import NfoConfig
-from server.models.system import SystemConfig
+
+logger = logging.getLogger(__name__)
 
 # Config keys
 COOKIE_KEY = "tmdb_cookie"
@@ -36,6 +39,8 @@ NFO_CONFIG_KEY = "nfo_config"
 SYSTEM_CONFIG_KEY = "system_config"
 EMBY_CONFIG_KEY = "emby_config"
 NAMING_CONFIG_KEY = "naming_config"
+# 「旧默认 30s 已迁移」标记：只迁移一次，之后用户主动改回 30 也不会再被改
+TASK_TIMEOUT_MIGRATED_KEY = "system_config_task_timeout_migrated"
 CLOUD_115_CONFIG_KEY = "cloud_115_config"
 
 
@@ -417,9 +422,29 @@ class ConfigService:
             # 迁移: scrape_timeout → task_timeout
             if "scrape_timeout" in data and "task_timeout" not in data:
                 data["task_timeout"] = data.pop("scrape_timeout")
-            return SystemConfig(**data)
+            config = SystemConfig(**data)
         except (json.JSONDecodeError, ValueError):
             return SystemConfig()
+
+        return await self._migrate_legacy_task_timeout(config)
+
+    async def _migrate_legacy_task_timeout(self, config: SystemConfig) -> SystemConfig:
+        """把「旧版出厂默认 30s」一次性提到 300s。
+
+        30s 是上一版的默认值，但用户也可能主动选过 30，因此不能每次读都改：
+        迁移后落标记，之后用户再改回 30 会被尊重。
+        """
+        if await self.exists(TASK_TIMEOUT_MIGRATED_KEY):
+            return config
+
+        migrated = config
+        if config.task_timeout == 30:
+            migrated = config.model_copy(update={"task_timeout": 300})
+            await self.save_system_config(migrated)
+            logger.info("系统配置迁移: task_timeout 30 → 300（旧版默认值）")
+
+        await self.set(TASK_TIMEOUT_MIGRATED_KEY, "1")
+        return migrated
 
     # Emby config methods
     async def save_emby_config(self, config: EmbyConfig) -> None:

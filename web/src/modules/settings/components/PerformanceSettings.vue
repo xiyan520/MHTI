@@ -49,11 +49,11 @@ const emit = defineEmits<{
       />
     </SettingsField>
 
-    <SettingsField label="任务超时" hint="单位秒，适用于 TMDB 请求与图片下载" width="sm">
+    <SettingsField label="任务超时" hint="单位秒，覆盖单个文件的整个刮削流程" width="sm">
       <NInputNumber
         :value="taskTimeout"
         :min="10"
-        :max="300"
+        :max="1800"
         @update:value="emit('update:taskTimeout', $event)"
       />
     </SettingsField>

@@ -5,6 +5,7 @@
 _get_effective_nfo_config / _get_effective_download_config 等）与薄委托面不变。
 """
 
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Awaitable, Callable
@@ -149,7 +150,10 @@ class OutputWriter:
                     link_mode=mode,
                     year=year,
                 )
-                rename_result = facade.rename_service.execute_rename(local_request)
+                # 大文件复制是纯阻塞 IO：丢进线程池，超时/取消才不会把事件循环钉住
+                rename_result = await asyncio.to_thread(
+                    facade.rename_service.execute_rename, local_request
+                )
                 if not rename_result.success:
                     raise ValueError(rename_result.error or "本地整理失败")
             return StorageLocator(
@@ -292,7 +296,10 @@ class OutputWriter:
         move_step.logs.append(ScrapeLogEntry(message=f"整理模式: {mode_name}"))
         await notify_log_update()
 
-        rename_result = self._facade.rename_service.execute_rename(rename_request)
+        # 同上：复制/移动 GB 级文件不能占着事件循环
+        rename_result = await asyncio.to_thread(
+            self._facade.rename_service.execute_rename, rename_request
+        )
         if not rename_result.success:
             if rename_result.error and "already exists" in rename_result.error:
                 move_step.logs.append(ScrapeLogEntry(message=f"目标文件已存在: {rename_result.dest_path}", level=ScrapeLogLevel.WARNING))

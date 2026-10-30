@@ -1,13 +1,16 @@
 """Unit tests for ConfigService."""
 
+import tempfile
+from pathlib import Path
+
 import aiosqlite
 import pytest
-from pathlib import Path
-import tempfile
+from pydantic import ValidationError
 
+from server.domain.system.config_service import ConfigService
 from server.models.cloud_115 import Cloud115Config
 from server.models.storage import StorageLocator, StorageProvider
-from server.domain.system.config_service import ConfigService
+from server.models.system import SystemConfig
 from server.models.template import NamingTemplate
 
 
@@ -250,3 +253,38 @@ class TestConfigService115:
         result = await config_service.get_115_config()
 
         assert result == Cloud115Config()
+
+
+class TestTaskTimeoutMigration:
+    """旧版出厂默认 30s 的一次性迁移。"""
+
+    @pytest.mark.asyncio
+    async def test_legacy_default_is_bumped_once(self, config_service):
+        await config_service.save_system_config(SystemConfig(task_timeout=30))
+
+        migrated = await config_service.get_system_config()
+
+        assert migrated.task_timeout == 300
+        # 结论要落库：否则每次读都要再判断一次，用户改回 30 也会被反复覆盖
+        assert (await config_service.get_system_config()).task_timeout == 300
+
+    @pytest.mark.asyncio
+    async def test_user_chosen_value_is_respected_after_migration(self, config_service):
+        await config_service.save_system_config(SystemConfig(task_timeout=30))
+        await config_service.get_system_config()
+
+        await config_service.save_system_config(SystemConfig(task_timeout=30))
+        assert (await config_service.get_system_config()).task_timeout == 30
+
+    @pytest.mark.asyncio
+    async def test_non_default_value_is_untouched(self, config_service):
+        await config_service.save_system_config(SystemConfig(task_timeout=120))
+        assert (await config_service.get_system_config()).task_timeout == 120
+
+    def test_default_for_new_install(self):
+        assert SystemConfig().task_timeout == 300
+
+    def test_upper_bound_is_raised(self):
+        assert SystemConfig(task_timeout=1800).task_timeout == 1800
+        with pytest.raises(ValidationError):
+            SystemConfig(task_timeout=1801)

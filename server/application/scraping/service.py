@@ -14,8 +14,21 @@ from tempfile import TemporaryDirectory
 
 import httpx
 
+from server.application.scraping.config_resolver import ScraperConfigResolver
+from server.application.scraping.media_pipeline import ScraperMediaPipeline
+from server.application.scraping.metadata_resolver import ScraperMetadataResolver
+from server.application.scraping.output_writer import OutputWriter, _get_mode_name
+from server.application.scraping.p115_storage_provider import P115StorageProvider
+from server.domain.artifacts.image_service import ImageService
+from server.domain.artifacts.nfo_service import NFOService
+from server.domain.artifacts.rename_service import RenameService
+from server.domain.artifacts.subtitle_service import SubtitleService
+from server.domain.integration.emby_service import EmbyService
+from server.domain.metadata.tmdb_service import TMDBService
+from server.domain.parsing.parser_service import ParserService
+from server.domain.system.config_service import ConfigService
 from server.models.emby import ConflictCheckResult, ConflictType
-from server.models.history import ScrapeLogLevel, ScrapeLogEntry, ScrapeLogStep
+from server.models.history import ScrapeLogEntry, ScrapeLogLevel, ScrapeLogStep
 from server.models.manual_job import ManualJobAdvancedSettings
 from server.models.nfo import SeasonNFO
 from server.models.organize import OrganizeMode
@@ -31,19 +44,6 @@ from server.models.scraper import (
 )
 from server.models.storage import StorageLocator, StorageProvider
 from server.models.tmdb import TMDBSearchResult, TMDBSeason, TMDBSeries
-from server.domain.system.config_service import ConfigService
-from server.domain.integration.emby_service import EmbyService
-from server.domain.artifacts.image_service import ImageService
-from server.domain.artifacts.nfo_service import NFOService
-from server.domain.parsing.parser_service import ParserService
-from server.domain.artifacts.rename_service import RenameService
-from server.application.scraping.config_resolver import ScraperConfigResolver
-from server.application.scraping.media_pipeline import ScraperMediaPipeline
-from server.application.scraping.metadata_resolver import ScraperMetadataResolver
-from server.application.scraping.output_writer import OutputWriter, _get_mode_name
-from server.application.scraping.p115_storage_provider import P115StorageProvider
-from server.domain.artifacts.subtitle_service import SubtitleService
-from server.domain.metadata.tmdb_service import TMDBService
 
 logger = logging.getLogger(__name__)
 
@@ -698,6 +698,35 @@ class ScraperService:
 
         parse_step.logs.append(ScrapeLogEntry(message=f"解析结果: {parsed.series_name} S{parsed.season or '?'}E{parsed.episode or '?'}"))
         scrape_logs.append(parse_step)
+        await notify_log_update()
+
+        # R18 准入预检：搜索阶段只保留 adult 结果，Token 未开 R18 时结果恒为空，
+        # 用户只会看到「未找到匹配的成人剧集」，根本不知道是权限问题。
+        # 未探测过（None）时不拦截，避免误伤正常配置。
+        adult_step = ScrapeLogStep(name="检查 TMDB 权限", logs=[])
+        scrape_logs.append(adult_step)
+        try:
+            adult_enabled, adult_message, _checked_at = await self.config_service.get_adult_status()
+        except Exception as e:  # noqa: BLE001 - 预检失败不阻断，保持原有行为
+            logger.warning(f"读取 R18 状态失败，跳过预检: {e}")
+            adult_enabled, adult_message = None, None
+
+        if adult_enabled is False:
+            adult_step.logs.append(ScrapeLogEntry(
+                message=adult_message or "TMDB Token 未开启 R18 可见性",
+                level=ScrapeLogLevel.ERROR,
+            ))
+            adult_step.completed = False
+            await notify_log_update()
+            result.status = ScrapeStatus.API_FAILED
+            result.message = (
+                "TMDB Token 未开启 R18（成人内容）可见性，搜索不会返回任何结果；"
+                "请到设置页重新验证 Token"
+            )
+            result.scrape_logs = scrape_logs
+            return result
+
+        adult_step.logs.append(ScrapeLogEntry(message="Token 具备 R18 可见性（或尚未探测）"))
         await notify_log_update()
 
         # Step 2: Search TMDB using API
