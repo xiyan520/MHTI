@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from server.application.scraping.ports import ScrapingPorts
 from server.application.scraping.service import ScraperService
 from server.domain.artifacts.nfo_service import NFOService
 from server.domain.artifacts.rename_service import RenameService
@@ -484,3 +485,15 @@ async def test_scrape_file_stops_when_adult_access_disabled(temp_db: Path):
     assert "R18" in (result.message or "")
     tmdb.search_series_by_api.assert_not_awaited()
     assert [step.name for step in result.scrape_logs][:2] == ["解析文件名", "检查 TMDB 权限"]
+
+
+def test_scraper_service_satisfies_scraping_ports(temp_db: Path):
+    """OutputWriter 只依赖 ScrapingPorts 契约：门面必须把成员都提供出来。
+
+    这条断言代替「output_writer 直接 import ScraperService」：以后谁把门面上的
+    _get_storage_provider / _download_* 改名或搬走，这里会先红，而不是等到运行时
+    AttributeError。
+    """
+    service = _build_service(temp_db, FakeTMDB())
+
+    assert isinstance(service, ScrapingPorts)

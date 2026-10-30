@@ -1,23 +1,23 @@
 """刮削输出编排 - 存储输出、本地整理链路与元数据落盘。
 
-从 service.py 拆出的协作者。所有协作调用经门面（ScraperService）分发：
-保持实例级 monkeypatch 接缝（受测名字：_get_storage_provider /
-_get_effective_nfo_config / _get_effective_download_config 等）与薄委托面不变。
+从 service.py 拆出的协作者。需要的门面能力由 ScrapingPorts 契约声明（见 ports.py），
+不直接 import ScraperService：依赖方向单向，类型层面也不会成环。
+
+运行时仍是同一个门面实例，因此实例级 monkeypatch 接缝（_get_storage_provider /
+_get_effective_nfo_config / _get_effective_download_config 等）保持有效。
 """
 
 import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import Awaitable, Callable
 
+from server.application.scraping.ports import ScrapingPorts
 from server.models.history import ScrapeLogEntry, ScrapeLogLevel, ScrapeLogStep
 from server.models.organize import OrganizeMode
 from server.models.rename import RenameRequest
 from server.models.scraper import ScrapeResult, ScrapeStatus
 from server.models.storage import StorageLocator, StorageProvider
-
-if TYPE_CHECKING:
-    from server.application.scraping.service import ScraperService
 
 # 整理模式中文名称映射
 _MODE_NAMES = {
@@ -38,14 +38,15 @@ def _get_mode_name(mode: OrganizeMode | None) -> str:
 class OutputWriter:
     """输出定位解析、115/本地整理执行与本地元数据落盘。"""
 
-    def __init__(self, facade: "ScraperService") -> None:
-        self._facade = facade
+    def __init__(self, ports: ScrapingPorts) -> None:
+        """ports: 门面提供的协作能力（见 ScrapingPorts）。"""
+        self._ports = ports
 
     async def resolve_p115_output_locator(self, locator: StorageLocator) -> StorageLocator:
         """输出目录缺少 file_id 时，按路径解析出真实的 115 目录 id。"""
         from server.domain.integration.p115_service import P115Service
 
-        svc = P115Service(self._facade.config_service)
+        svc = P115Service(self._ports.config_service)
         directory_id = await svc.resolve_directory_id_by_path(locator.path)
         return StorageLocator(
             provider=StorageProvider.P115,
@@ -93,7 +94,7 @@ class OutputWriter:
         if file_locator.provider != StorageProvider.P115:
             raise ValueError("仅支持 115 网盘文件走 provider 输出分支")
 
-        facade = self._facade
+        ports = self._ports
         mode = link_mode or OrganizeMode.MOVE
         rename_request = self.build_rename_request(
             source_path=source_path,
@@ -104,12 +105,12 @@ class OutputWriter:
             link_mode=mode,
             year=year,
         )
-        preview = facade.rename_service.preview_rename(rename_request)
+        preview = ports.rename_service.preview_rename(rename_request)
         dest_path = Path(preview.dest_path)
         output_base = Path(output_locator.path)
 
         if output_locator.provider == StorageProvider.P115:
-            provider = facade._get_storage_provider(StorageProvider.P115)
+            provider = ports._get_storage_provider(StorageProvider.P115)
 
             # 输出目录必须有 file_id 才能创建子目录；缺失时按路径解析
             effective_output_locator = output_locator
@@ -138,7 +139,7 @@ class OutputWriter:
             )
 
         if output_locator.provider == StorageProvider.LOCAL:
-            provider = facade._get_storage_provider(StorageProvider.P115)
+            provider = ports._get_storage_provider(StorageProvider.P115)
             with TemporaryDirectory(prefix="mhti-115-download-") as temp_dir:
                 downloaded_path = await provider.download(file_locator, Path(temp_dir))
                 local_request = self.build_rename_request(
@@ -152,7 +153,7 @@ class OutputWriter:
                 )
                 # 大文件复制是纯阻塞 IO：丢进线程池，超时/取消才不会把事件循环钉住
                 rename_result = await asyncio.to_thread(
-                    facade.rename_service.execute_rename, local_request
+                    ports.rename_service.execute_rename, local_request
                 )
                 if not rename_result.success:
                     raise ValueError(rename_result.error or "本地整理失败")
@@ -193,7 +194,7 @@ class OutputWriter:
             await notify_log_update()
             return "", Path(), Path()
 
-        facade = self._facade
+        ports = self._ports
 
         # 通过预览得到剧集/季文件夹结构（不实际移动文件）
         preview_request = self.build_rename_request(
@@ -205,7 +206,7 @@ class OutputWriter:
             output_dir=output_dir_for_preview,
             link_mode=link_mode,
         )
-        preview = facade.rename_service.preview_rename(preview_request)
+        preview = ports.rename_service.preview_rename(preview_request)
         dest_path = Path(preview.dest_path)
         series_folder = Path(preview.dest_folder).parent
         season_folder = Path(preview.dest_folder)
@@ -218,7 +219,7 @@ class OutputWriter:
         )
 
         # NFO
-        nfo_config = await facade._get_effective_nfo_config(None)
+        nfo_config = await ports._get_effective_nfo_config(None)
         nfo_path_str = ""
         if nfo_config["nfo_enabled"]:
             nfo_path = metadata_season_folder / f"{dest_path.stem}.nfo"
@@ -229,15 +230,15 @@ class OutputWriter:
             tvshow_nfo_path = metadata_series_folder / "tvshow.nfo"
             if not tvshow_nfo_path.exists():
                 metadata_series_folder.mkdir(parents=True, exist_ok=True)
-                tvshow_nfo_data = facade.nfo_service.tvshow_from_tmdb(series)
-                tvshow_nfo_content = facade.nfo_service.generate_tvshow_nfo(tvshow_nfo_data)
+                tvshow_nfo_data = ports.nfo_service.tvshow_from_tmdb(series)
+                tvshow_nfo_content = ports.nfo_service.generate_tvshow_nfo(tvshow_nfo_data)
                 tvshow_nfo_path.write_text(tvshow_nfo_content, encoding="utf-8")
                 move_step.logs.append(ScrapeLogEntry(message="tvshow.nfo 已生成"))
 
             season_nfo_path = metadata_season_folder / "season.nfo"
             if not season_nfo_path.exists():
-                season_nfo_data = facade._get_season_nfo_data(series, season)
-                season_nfo_content = facade.nfo_service.generate_season_nfo(season_nfo_data)
+                season_nfo_data = ports._get_season_nfo_data(series, season)
+                season_nfo_content = ports.nfo_service.generate_season_nfo(season_nfo_data)
                 season_nfo_path.write_text(season_nfo_content, encoding="utf-8")
                 move_step.logs.append(ScrapeLogEntry(message="season.nfo 已生成"))
         else:
@@ -245,9 +246,9 @@ class OutputWriter:
         await notify_log_update()
 
         # 图片
-        download_config = await facade._get_effective_download_config(None)
+        download_config = await ports._get_effective_download_config(None)
         if download_config["download_poster"] or download_config["download_fanart"]:
-            await facade._download_series_images(
+            await ports._download_series_images(
                 series,
                 str(metadata_series_folder),
                 download_poster=download_config["download_poster"],
@@ -255,7 +256,7 @@ class OutputWriter:
             )
             move_step.logs.append(ScrapeLogEntry(message="剧集图片处理完成"))
         if download_config["download_thumb"]:
-            await facade._download_episode_image(
+            await ports._download_episode_image(
                 season_info, season, episode, str(metadata_season_folder), dest_path.stem
             )
             move_step.logs.append(ScrapeLogEntry(message="集封面图处理完成"))
@@ -298,7 +299,7 @@ class OutputWriter:
 
         # 同上：复制/移动 GB 级文件不能占着事件循环
         rename_result = await asyncio.to_thread(
-            self._facade.rename_service.execute_rename, rename_request
+            self._ports.rename_service.execute_rename, rename_request
         )
         if not rename_result.success:
             if rename_result.error and "already exists" in rename_result.error:

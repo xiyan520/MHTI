@@ -34,6 +34,7 @@
 - `ARCHITECTURE.md` 入库（此前被 `.gitignore` 忽略，但代码注释一直在引用它）
 - 系统设置的任务超时输入上限同步放宽到 1800s
 - TMDB 与图片下载复用共享 httpx 客户端（按 proxy/timeout 缓存），单文件刮削少 6 次左右 TLS 握手；关闭时统一 `aclose()`
+- `OutputWriter` 改为依赖 `ScrapingPorts` 契约（Protocol），不再反向 import `ScraperService`；新增一条 `isinstance` 断言防止契约漂移
 
 ### 移除
 - `tracked_py.txt`（长期空文件）

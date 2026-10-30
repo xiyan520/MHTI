@@ -96,6 +96,7 @@ class ScraperService:
         self._config_resolver = ScraperConfigResolver(config_service, tmdb_service)
         self._metadata_resolver = ScraperMetadataResolver(tmdb_service, nfo_service)
         self._media_pipeline = ScraperMediaPipeline(image_service, subtitle_service, emby_service)
+        # OutputWriter 只认 ScrapingPorts 契约；self 结构化满足，无需显式继承
         self._output_writer = OutputWriter(self)
 
     # ---- 配置检查与有效配置（转发到 ScraperConfigResolver，保持原方法面）----
