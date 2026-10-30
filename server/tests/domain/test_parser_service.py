@@ -3,6 +3,7 @@
 import pytest
 
 from server.domain.parsing.parser_service import ParserService
+from server.domain.parsing.parsers.cleaner import strip_known_group_prefix
 
 
 @pytest.fixture
@@ -515,3 +516,29 @@ class TestCleanedNameParsing:
         result = parser_service.parse("作品名 OVA.mp4")
         assert result.episode == 1
         assert result.season == 1
+
+
+class TestStudioPrefixFallback:
+    """制作组粘在剧名开头时的搜索降级（不是解析改写）。"""
+
+    @pytest.mark.parametrize(
+        "title,expected",
+        [
+            ("魔人○○交配", "○○交配"),
+            ("nurハメハラ", "ハメハラ"),
+            ("ピンクパイナップル無自覚な幼馴染", "無自覚な幼馴染"),
+        ],
+    )
+    def test_strips_glued_studio_name(self, title, expected):
+        assert strip_known_group_prefix(title) == expected
+
+    @pytest.mark.parametrize("title", ["魔人", "無自覚な幼馴染", ""])
+    def test_returns_none_when_not_applicable(self, title):
+        assert strip_known_group_prefix(title) is None
+
+    def test_volume_marker_counts_as_episode(self, parser_service):
+        """第1巻 是卷号，对这类作品等同于第 1 集；顺带把残留的 chs 语言标记去掉。"""
+        result = parser_service.parse("作品名 THE ANIMATION 第1巻 chs.mp4")
+
+        assert result.episode == 1
+        assert "chs" not in (result.series_name or "")

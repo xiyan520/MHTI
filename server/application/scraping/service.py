@@ -204,6 +204,21 @@ class ScraperService:
         """输出目录缺少 file_id 时，按路径解析出真实的 115 目录 id。"""
         return await self._output_writer.resolve_p115_output_locator(locator)
 
+    def _build_search_keywords(self, title: str) -> list[str]:
+        """搜索降级链：原词优先，其次是去掉开头已知制作组名的版本。
+
+        制作组常直接粘在剧名前面（魔人○○交配 / nurハメハラ / ピンクパイナップル…），
+        解析阶段不改写剧名，只在搜索落空时降级重试——「魔人探偵脳噛ネウロ」这类
+        正常标题不该被削掉。
+        """
+        from server.domain.parsing.parsers.cleaner import strip_known_group_prefix
+
+        keywords = [title]
+        stripped = strip_known_group_prefix(title)
+        if stripped and stripped != title:
+            keywords.append(stripped)
+        return keywords
+
     def _auto_correct_season(
         self,
         requested_season: int,
@@ -731,34 +746,51 @@ class ScraperService:
         await notify_log_update()
 
         # Step 2: Search TMDB using API
+        # 解析出来的剧名常把制作组粘在前面（260925魔人○○交配 / nurハメハラ /
+        # ピンクパイナップル無自覚な…），拿整串去搜必然 0 结果。这里按
+        # 「原词 → 去掉制作组前缀」逐级降级，而不是在解析阶段直接改写剧名——
+        # 有些作品名本身就以制作组名开头（魔人探偵脳噛ネウロ）。
         search_step = ScrapeLogStep(name="搜索 TMDB", logs=[])
-        search_step.logs.append(ScrapeLogEntry(message=f"搜索关键词: {parsed.series_name}"))
         scrape_logs.append(search_step)
         await notify_log_update()
 
-        try:
-            search_response = await self.tmdb_service.search_series_by_api(parsed.series_name)
-            # 只保留成人内容
+        adult_results: list[TMDBSearchResult] = []
+        for keyword in self._build_search_keywords(parsed.series_name):
+            search_step.logs.append(ScrapeLogEntry(message=f"搜索关键词: {keyword}"))
+            await notify_log_update()
+
+            try:
+                search_response = await self.tmdb_service.search_series_by_api(keyword)
+            except httpx.TimeoutException:
+                search_step.logs.append(ScrapeLogEntry(message="TMDB 搜索超时", level=ScrapeLogLevel.ERROR))
+                search_step.completed = False
+                await notify_log_update()
+                result.status = ScrapeStatus.SEARCH_FAILED
+                result.message = "TMDB 搜索超时，请检查网络或 Cookie"
+                result.scrape_logs = scrape_logs
+                return result
+            except httpx.RequestError as e:
+                search_step.logs.append(ScrapeLogEntry(message=f"TMDB 搜索失败: {str(e)}", level=ScrapeLogLevel.ERROR))
+                search_step.completed = False
+                await notify_log_update()
+                result.status = ScrapeStatus.SEARCH_FAILED
+                result.message = f"TMDB 搜索失败: {str(e)}"
+                result.scrape_logs = scrape_logs
+                return result
+
+            # 两个计数分开写：只报「找到 0 个结果」时分不清是 TMDB 没搜到，
+            # 还是搜到了但一条成人内容都没有
+            raw_count = len(search_response.results)
             adult_results = [r for r in search_response.results if r.adult]
-            result.search_results = adult_results
-            search_step.logs.append(ScrapeLogEntry(message=f"找到 {len(adult_results)} 个匹配结果"))
+            search_step.logs.append(ScrapeLogEntry(
+                message=f"TMDB 返回 {raw_count} 条，其中成人条目 {len(adult_results)} 条"
+            ))
             await notify_log_update()
-        except httpx.TimeoutException:
-            search_step.logs.append(ScrapeLogEntry(message="TMDB 搜索超时", level=ScrapeLogLevel.ERROR))
-            search_step.completed = False
-            await notify_log_update()
-            result.status = ScrapeStatus.SEARCH_FAILED
-            result.message = "TMDB 搜索超时，请检查网络或 Cookie"
-            result.scrape_logs = scrape_logs
-            return result
-        except httpx.RequestError as e:
-            search_step.logs.append(ScrapeLogEntry(message=f"TMDB 搜索失败: {str(e)}", level=ScrapeLogLevel.ERROR))
-            search_step.completed = False
-            await notify_log_update()
-            result.status = ScrapeStatus.SEARCH_FAILED
-            result.message = f"TMDB 搜索失败: {str(e)}"
-            result.scrape_logs = scrape_logs
-            return result
+
+            if adult_results:
+                break
+
+        result.search_results = adult_results
 
         if not adult_results:
             search_step.logs.append(ScrapeLogEntry(message="未找到匹配的成人剧集", level=ScrapeLogLevel.WARNING))

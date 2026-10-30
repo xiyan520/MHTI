@@ -497,3 +497,49 @@ def test_scraper_service_satisfies_scraping_ports(temp_db: Path):
     service = _build_service(temp_db, FakeTMDB())
 
     assert isinstance(service, ScrapingPorts)
+
+
+@pytest.mark.asyncio
+async def test_search_falls_back_when_title_starts_with_studio(
+    temp_db: Path, tmp_path: Path, monkeypatch
+) -> None:
+    """剧名粘着制作组时，第一次关键词 0 条，应自动降级重搜并选中结果。"""
+    src = tmp_path / "260925魔人○○交配_第一話_chs.mp4"
+    src.write_bytes(b"video")
+    out_dir = tmp_path / "library"
+
+    empty = TMDBSearchResponse(query="魔人○○交配", total_results=0, results=[])
+    hit = TMDBSearchResponse(
+        query="○○交配",
+        total_results=1,
+        results=[TMDBSearchResult(id=85174, name="○○交配", adult=True)],
+    )
+    tmdb = FakeTMDB()
+    tmdb.search_series_by_api = AsyncMock(side_effect=[empty, hit])
+    service = _build_service(temp_db, tmdb, parser=ParserService())
+    _patch_tail(monkeypatch, service)
+
+    result = await service.scrape_file(
+        ScrapeRequest(
+            file_path=str(src),
+            output_dir=str(out_dir),
+            auto_select=True,
+            link_mode=OrganizeMode.COPY,
+        )
+    )
+
+    assert result.status == ScrapeStatus.SUCCESS
+    assert result.selected_id == 85174
+
+    keywords = [call.args[0] for call in tmdb.search_series_by_api.await_args_list]
+    assert keywords == ["魔人○○交配", "○○交配"]
+
+    messages = [
+        entry.message
+        for step in result.scrape_logs
+        if step.name == "搜索 TMDB"
+        for entry in step.logs
+    ]
+    # 日志要能区分「TMDB 没搜到」和「搜到但都不是成人内容」
+    assert any("TMDB 返回 0 条" in message for message in messages)
+    assert any("搜索关键词: ○○交配" in message for message in messages)

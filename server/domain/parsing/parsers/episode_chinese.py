@@ -20,9 +20,9 @@ from server.domain.parsing.parsers.episode_japanese import kanji_to_number
 CHINESE_PATTERNS = [
     # ===== 季+集 组合格式 =====
     # 第X季 第Y集（允许中间有空格和其他字符）
-    (r"第(\d{1,2})季.*?第(\d{1,3})[集话回]", "season_episode_digit"),
+    (r"第(\d{1,2})季.*?第(\d{1,3})[集话回巻卷]", "season_episode_digit"),
     # 第X季第Y集（紧密连接）
-    (r"第(\d{1,2})季第(\d{1,3})[集话回]", "season_episode_digit"),
+    (r"第(\d{1,2})季第(\d{1,3})[集话回巻卷]", "season_episode_digit"),
     # 第X季 EY 或 第X季 Y（空格或点分隔）
     (r"第(\d{1,2})季[.\s_-]+[Ee]?(\d{1,3})(?=[.\s_-]|$)", "season_episode_digit"),
     # 第X季EY（无分隔）
@@ -33,11 +33,11 @@ CHINESE_PATTERNS = [
 
     # ===== 仅集数模式 =====
     # 第X集/话/回
-    (r"第(\d+)[集话回]", "episode_digit"),
+    (r"第(\d+)[集话回巻卷]", "episode_digit"),
     # 第X話（日语写法但用数字）
     (r"第(\d+)話", "episode_digit"),
     # 中文数字
-    (r"第([一二三四五六七八九十百千]+)[集话回話]", "episode_chinese"),
+    (r"第([一二三四五六七八九十百千]+)[集话回話巻卷]", "episode_chinese"),
 ]
 
 

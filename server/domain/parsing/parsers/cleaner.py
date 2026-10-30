@@ -78,6 +78,12 @@ def strip_date_prefix(text: str) -> str:
 # ============================================================================
 # 里番制作组/发布者（扩展列表）
 # ============================================================================
+# 语言标记也可能是「_chs」「 chs」这种不带点的写法（…第1巻 chs.mp4）
+TRAILING_LANGUAGE_TAG = re.compile(
+    r"[\s_.\-]+(?:chs|cht|chi|sc|tc|jpn|jap|eng|kor|zho|und)$",
+    re.I,
+)
+
 KNOWN_GROUPS = [
     # ===== 主要里番制作公司 =====
     r"Queen\s*Bee",
@@ -198,6 +204,29 @@ def is_author_bracket(content: str) -> bool:
     return False
 
 
+def strip_known_group_prefix(text: str) -> str | None:
+    """去掉开头没有被方括号包住的已知制作组名。
+
+    制作组常常直接粘在剧名前面（魔人○○交配 / nurハメハラ /
+    ピンクパイナップル無自覚な…），cleaner 只处理带方括号的形式，这些会原样留在
+    剧名里，拿去 TMDB 搜是 0 结果。
+
+    返回值：剥离后的文本；没命中、或剥离后不剩实质内容时返回 None。
+
+    只给「搜索降级」这类场景用，清洗流程不要调用它——有些作品名本身就以制作组名
+    开头（魔人探偵脳噛ネウロ），直接改写会毁掉正常标题。
+    """
+    stripped = text.lstrip()
+    for pattern in KNOWN_GROUPS:
+        match = re.match(pattern, stripped, re.I)
+        if not match:
+            continue
+        rest = stripped[match.end():].lstrip(" -_.·:：")
+        if has_meaningful_text(rest):
+            return rest
+    return None
+
+
 class CleanerPlugin(ParserPlugin):
     """里番专用文件名清洗插件.
 
@@ -216,9 +245,12 @@ class CleanerPlugin(ParserPlugin):
         # 1. 移除视频扩展名
         cleaned = re.sub(VIDEO_EXTENSIONS, "", cleaned, flags=re.I)
 
-        # 2. 移除语言标识
+        # 2. 移除语言标识（.chs 这类带点写法）
         for pattern in LANGUAGE_SUFFIXES:
             cleaned = re.sub(pattern, "", cleaned, flags=re.I)
+
+        # 2.5 再兜一层不带点的写法：作品名_chs / 作品名 chs
+        cleaned = TRAILING_LANGUAGE_TAG.sub("", cleaned)
 
         # 3. 移除日期前缀 [251114] / 251114] / 251114_ / [2019-05-06]
         cleaned = strip_date_prefix(cleaned).lstrip()
